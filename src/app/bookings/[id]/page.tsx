@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
@@ -264,7 +265,7 @@ export default function BookingDetailPage() {
                     <td className="px-4 py-3">
                       <Badge variant={paymentStatusVariant(payment.status)}>{payment.status}</Badge>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 flex gap-2">
                       {(payment.status === 'Pending' || payment.status === 'Partial' || payment.status === 'Overdue') && (
                         <button
                           onClick={() => setEditPayment(payment)}
@@ -272,6 +273,15 @@ export default function BookingDetailPage() {
                         >
                           Record Payment
                         </button>
+                      )}
+                      {payment.amount_paid > 0 && (
+                        <Link
+                          href={`/receipts/${payment.id}`}
+                          className="text-[#1E5184] hover:underline text-sm"
+                          target="_blank"
+                        >
+                          Receipt
+                        </Link>
                       )}
                     </td>
                   </tr>
