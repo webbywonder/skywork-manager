@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
+import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import PaymentForm from '@/components/forms/PaymentForm'
 import { useToast } from '@/components/ui/Toast'
 import { formatCurrency, formatDate } from '@/lib/utils'
@@ -36,6 +37,7 @@ interface BookingDetail {
 
 /**
  * Booking detail page with info summary and payment ledger.
+ * Payment ledger is a simple list of payment records (each entry = money received).
  */
 export default function BookingDetailPage() {
   const params = useParams()
@@ -44,7 +46,8 @@ export default function BookingDetailPage() {
   const [booking, setBooking] = useState<BookingDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
-  const [editPayment, setEditPayment] = useState<Payment | null>(null)
+  const [deletePayment, setDeletePayment] = useState<Payment | null>(null)
+  const [showDeleteBooking, setShowDeleteBooking] = useState(false)
 
   const fetchBooking = useCallback(async () => {
     try {
@@ -56,7 +59,7 @@ export default function BookingDetailPage() {
         showToast('error', 'Booking not found')
         router.push('/bookings')
       }
-    } catch (error) {
+    } catch {
       showToast('error', 'Failed to load booking')
     } finally {
       setLoading(false)
@@ -68,51 +71,76 @@ export default function BookingDetailPage() {
   }, [fetchBooking])
 
   const handleLogPayment = async (data: Record<string, string>) => {
-    const res = await fetch('/api/payments', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    })
-    const json = await res.json()
-    if (json.success) {
-      showToast('success', 'Payment logged')
-      setShowPaymentModal(false)
-      fetchBooking()
-    } else {
-      showToast('error', json.error || 'Failed to log payment')
+    try {
+      const res = await fetch('/api/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      const json = await res.json()
+      if (json.success) {
+        showToast('success', 'Payment logged')
+        setShowPaymentModal(false)
+        fetchBooking()
+      } else {
+        showToast('error', json.error || 'Failed to log payment')
+      }
+    } catch {
+      showToast('error', 'Network error: Failed to log payment')
     }
   }
 
-  const handleUpdatePayment = async (data: Record<string, string>) => {
-    if (!editPayment) return
-    const res = await fetch(`/api/payments/${editPayment.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    })
-    const json = await res.json()
-    if (json.success) {
-      showToast('success', 'Payment updated')
-      setEditPayment(null)
-      fetchBooking()
-    } else {
-      showToast('error', json.error || 'Failed to update payment')
+  const handleDeletePayment = async () => {
+    if (!deletePayment) return
+    try {
+      const res = await fetch(`/api/payments/${deletePayment.id}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (json.success) {
+        showToast('success', 'Payment deleted')
+        setDeletePayment(null)
+        fetchBooking()
+      } else {
+        showToast('error', json.error || 'Failed to delete payment')
+      }
+    } catch {
+      showToast('error', 'Network error: Failed to delete payment')
     }
   }
 
-  const paymentStatusVariant = (status: string) => {
-    switch (status) {
-      case 'Paid': return 'green' as const
-      case 'Partial': return 'yellow' as const
-      case 'Overdue': return 'red' as const
-      default: return 'gray' as const
+  const handleDeleteBooking = async () => {
+    try {
+      const res = await fetch(`/api/bookings/${params.id}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (json.success) {
+        showToast('success', 'Booking deleted')
+        router.push('/bookings')
+      } else {
+        showToast('error', json.error || 'Failed to delete booking')
+      }
+    } catch {
+      showToast('error', 'Network error: Failed to delete booking')
     }
   }
 
   if (loading) return <div className="text-gray-500">Loading...</div>
   if (!booking) return <div className="text-gray-500">Booking not found</div>
 
-  const totalDue = booking.payments.reduce((sum, p) => sum + p.amount_due, 0)
+  // Monthly due = rate × seats + GST
+  const baseMonthly = booking.rate * booking.seats
+  const gstMonthly = booking.gst_applicable ? Math.round(baseMonthly * 18 / 100) : 0
+  const monthlyDue = baseMonthly + gstMonthly
+
+  // For recurring bookings, total due = monthly × months elapsed
+  // For one-off bookings, total due = single payment
+  let totalDue = monthlyDue
+  if (booking.type === 'recurring') {
+    const start = new Date(booking.start_date)
+    const now = new Date()
+    const monthsElapsed = (now.getFullYear() - start.getFullYear()) * 12
+      + (now.getMonth() - start.getMonth()) + 1
+    totalDue = monthlyDue * Math.max(1, monthsElapsed)
+  }
+
   const totalPaid = booking.payments.reduce((sum, p) => sum + p.amount_paid, 0)
   const balance = totalDue - totalPaid
 
@@ -141,12 +169,20 @@ export default function BookingDetailPage() {
             {booking.client_client_id && ` (${booking.client_client_id})`}
           </p>
         </div>
-        <button
-          onClick={() => setShowPaymentModal(true)}
-          className="px-4 py-2 text-sm font-medium text-white bg-[#1E5184] rounded-lg hover:bg-[#174068]"
-        >
-          + Log Payment
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowDeleteBooking(true)}
+            className="px-4 py-2 text-sm font-medium text-red-600 bg-white border border-red-300 rounded-lg hover:bg-red-50"
+          >
+            Delete Booking
+          </button>
+          <button
+            onClick={() => setShowPaymentModal(true)}
+            className="px-4 py-2 text-sm font-medium text-white bg-[#1E5184] rounded-lg hover:bg-[#174068]"
+          >
+            + Log Payment
+          </button>
+        </div>
       </div>
 
       {/* Booking Info Cards */}
@@ -236,12 +272,10 @@ export default function BookingDetailPage() {
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Type</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Period</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Due</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Paid</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Amount</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Date</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Method</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Reference</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Actions</th>
                 </tr>
               </thead>
@@ -251,29 +285,15 @@ export default function BookingDetailPage() {
                     <td className="px-4 py-3 capitalize">
                       {payment.payment_type.replace('_', ' ')}
                     </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {payment.billing_period_start && payment.billing_period_end
-                        ? `${formatDate(payment.billing_period_start)} - ${formatDate(payment.billing_period_end)}`
-                        : '-'}
+                    <td className="px-4 py-3 font-medium text-green-600">
+                      {formatCurrency(payment.amount_paid)}
                     </td>
-                    <td className="px-4 py-3">{formatCurrency(payment.amount_due)}</td>
-                    <td className="px-4 py-3 text-green-600">{formatCurrency(payment.amount_paid)}</td>
                     <td className="px-4 py-3 text-gray-600">
                       {payment.payment_date ? formatDate(payment.payment_date) : '-'}
                     </td>
                     <td className="px-4 py-3 text-gray-600">{payment.payment_method || '-'}</td>
-                    <td className="px-4 py-3">
-                      <Badge variant={paymentStatusVariant(payment.status)}>{payment.status}</Badge>
-                    </td>
+                    <td className="px-4 py-3 text-gray-600">{payment.payment_reference || '-'}</td>
                     <td className="px-4 py-3 flex gap-2">
-                      {(payment.status === 'Pending' || payment.status === 'Partial' || payment.status === 'Overdue') && (
-                        <button
-                          onClick={() => setEditPayment(payment)}
-                          className="text-[#1E5184] hover:underline text-sm"
-                        >
-                          Record Payment
-                        </button>
-                      )}
                       {payment.amount_paid > 0 && (
                         <Link
                           href={`/receipts/${payment.id}`}
@@ -283,6 +303,12 @@ export default function BookingDetailPage() {
                           Receipt
                         </Link>
                       )}
+                      <button
+                        onClick={() => setDeletePayment(payment)}
+                        className="text-red-500 hover:underline text-sm"
+                      >
+                        Delete
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -303,22 +329,35 @@ export default function BookingDetailPage() {
       <Modal isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} title="Log Payment">
         <PaymentForm
           bookingId={booking.id}
+          bookingRate={booking.rate}
+          bookingSeats={booking.seats}
+          bookingGst={booking.gst_applicable === 1}
           onSubmit={handleLogPayment}
           onCancel={() => setShowPaymentModal(false)}
         />
       </Modal>
 
-      {/* Record Payment Modal (for updating existing) */}
-      <Modal isOpen={!!editPayment} onClose={() => setEditPayment(null)} title="Record Payment">
-        {editPayment && (
-          <PaymentForm
-            bookingId={booking.id}
-            payment={editPayment}
-            onSubmit={handleUpdatePayment}
-            onCancel={() => setEditPayment(null)}
-          />
-        )}
-      </Modal>
+      {/* Delete Payment Confirmation */}
+      <ConfirmDialog
+        isOpen={!!deletePayment}
+        title="Delete Payment"
+        message={`Are you sure you want to delete this ${deletePayment?.payment_type.replace('_', ' ')} payment of ${deletePayment ? formatCurrency(deletePayment.amount_paid) : ''}? This action cannot be undone.`}
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={handleDeletePayment}
+        onCancel={() => setDeletePayment(null)}
+      />
+
+      {/* Delete Booking Confirmation */}
+      <ConfirmDialog
+        isOpen={showDeleteBooking}
+        title="Delete Booking"
+        message={`Are you sure you want to delete booking ${booking.booking_id}? All associated payments will also be deleted. This action cannot be undone.`}
+        confirmLabel="Delete Booking"
+        variant="danger"
+        onConfirm={handleDeleteBooking}
+        onCancel={() => setShowDeleteBooking(false)}
+      />
     </div>
   )
 }

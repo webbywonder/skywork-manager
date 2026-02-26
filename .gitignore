@@ -36,4 +36,5 @@ yarn-error.log*
 next-env.d.ts
 
 # database
-/data/*.db
+/data/*.db*
+.playwright-mcp

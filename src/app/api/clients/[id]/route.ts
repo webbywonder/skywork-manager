@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
-import { toPaise } from '@/lib/utils'
+// Client fields: name, company_name, phone, email, documents, join_date, status, notes
 
 interface RouteContext {
   params: Promise<{ id: string }>
@@ -41,21 +41,19 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ success: false, error: 'Client not found' }, { status: 404 })
     }
 
-    const { name, company_name, phone, email, documents, package_type, seats, rate, join_date, status, notes } = body
+    const { name, company_name, phone, email, documents, join_date, status, notes } = body
 
-    if (!name || !phone || !package_type || !rate || !join_date) {
+    if (!name || !phone || !join_date) {
       return NextResponse.json(
-        { success: false, error: 'Name, phone, package type, rate, and join date are required' },
+        { success: false, error: 'Name, phone, and join date are required' },
         { status: 400 }
       )
     }
 
-    const rateInPaise = toPaise(parseFloat(rate))
-
     db.prepare(`
       UPDATE clients SET
         name = ?, company_name = ?, phone = ?, email = ?, documents = ?,
-        package_type = ?, seats = ?, rate = ?, join_date = ?, status = ?, notes = ?
+        join_date = ?, status = ?, notes = ?
       WHERE id = ?
     `).run(
       name,
@@ -63,9 +61,6 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       phone,
       email || null,
       documents || null,
-      package_type,
-      parseInt(seats, 10) || 1,
-      rateInPaise,
       join_date,
       status || 'Active',
       notes || null,

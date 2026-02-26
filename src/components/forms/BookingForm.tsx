@@ -62,17 +62,7 @@ export default function BookingForm({ clientId, onSubmit, onCancel }: BookingFor
       }
     }
 
-    if (field === 'client_id' && typeof value === 'string' && value) {
-      const client = clients.find(c => c.id.toString() === value)
-      if (client) {
-        updates.seats = client.seats.toString()
-        updates.rate = (client.rate / 100).toString()
-        updates.package = client.package_type
-        if (client.package_type === 'Monthly' || client.package_type === 'Private Cabin') {
-          updates.type = 'recurring'
-        }
-      }
-    }
+    // No auto-fill from client - package/rate/seats are booking-level decisions
 
     setForm(prev => ({ ...prev, ...updates }))
   }
@@ -126,7 +116,7 @@ export default function BookingForm({ clientId, onSubmit, onCancel }: BookingFor
               <option value="">Select a client...</option>
               {clients.map(c => (
                 <option key={c.id} value={c.id}>
-                  {c.client_id} - {c.name} ({c.package_type})
+                  {c.client_id} - {c.name}
                 </option>
               ))}
             </select>

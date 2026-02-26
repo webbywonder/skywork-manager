@@ -73,3 +73,41 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
 }
+
+/**
+ * DELETE /api/payments/[id] - Delete a payment entry.
+ * Reverses any credit balance that was added from overpayment.
+ */
+export async function DELETE(_request: NextRequest, context: RouteContext) {
+  try {
+    const db = getDb()
+    const { id } = await context.params
+    const paymentId = parseInt(id, 10)
+
+    const existing = db.prepare('SELECT * FROM payments WHERE id = ?').get(paymentId) as {
+      id: number; booking_id: number; amount_due: number; amount_paid: number
+    } | undefined
+
+    if (!existing) {
+      return NextResponse.json({ success: false, error: 'Payment not found' }, { status: 404 })
+    }
+
+    // Reverse credit balance if there was an overpayment
+    if (existing.amount_paid > existing.amount_due) {
+      const excess = existing.amount_paid - existing.amount_due
+      const booking = db.prepare('SELECT client_id FROM bookings WHERE id = ?').get(existing.booking_id) as { client_id: number | null }
+      if (booking?.client_id) {
+        db.prepare(
+          'UPDATE clients SET credit_balance = MAX(0, credit_balance - ?) WHERE id = ?'
+        ).run(excess, booking.client_id)
+      }
+    }
+
+    db.prepare('DELETE FROM payments WHERE id = ?').run(paymentId)
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to delete payment'
+    return NextResponse.json({ success: false, error: message }, { status: 500 })
+  }
+}

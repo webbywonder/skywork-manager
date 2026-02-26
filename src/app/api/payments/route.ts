@@ -63,11 +63,15 @@ export async function POST(request: NextRequest) {
     const amountDuePaise = amount_due ? toPaise(parseFloat(amount_due)) : 0
     const amountPaidPaise = amount_paid ? toPaise(parseFloat(amount_paid)) : 0
 
-    let status = 'Pending'
-    if (amountPaidPaise > 0 && amountPaidPaise >= amountDuePaise) {
-      status = 'Paid'
-    } else if (amountPaidPaise > 0) {
-      status = 'Partial'
+    // For manually logged payments (no amount_due), status is always Paid.
+    // For system-generated dues (has amount_due), derive status from comparison.
+    let status = 'Paid'
+    if (amountDuePaise > 0) {
+      if (amountPaidPaise <= 0) {
+        status = 'Pending'
+      } else if (amountPaidPaise < amountDuePaise) {
+        status = 'Partial'
+      }
     }
 
     const result = db.prepare(`

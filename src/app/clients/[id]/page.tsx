@@ -158,20 +158,8 @@ export default function ClientDetailPage() {
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-4">Membership</h3>
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-4">Account</h3>
             <dl className="space-y-3">
-              <div className="flex justify-between">
-                <dt className="text-sm text-gray-500">Package</dt>
-                <dd className="text-sm font-medium">{client.package_type}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-sm text-gray-500">Rate</dt>
-                <dd className="text-sm font-medium">{formatCurrency(client.rate)}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-sm text-gray-500">Seats</dt>
-                <dd className="text-sm font-medium">{client.seats}</dd>
-              </div>
               <div className="flex justify-between">
                 <dt className="text-sm text-gray-500">Join Date</dt>
                 <dd className="text-sm font-medium">{formatDate(client.join_date)}</dd>

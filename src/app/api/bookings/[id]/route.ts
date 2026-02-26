@@ -73,3 +73,53 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
 }
+
+/**
+ * DELETE /api/bookings/[id] - Delete a booking and all associated payments.
+ */
+export async function DELETE(_request: NextRequest, context: RouteContext) {
+  try {
+    const db = getDb()
+    const { id } = await context.params
+    const bookingId = parseInt(id, 10)
+
+    const existing = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingId)
+    if (!existing) {
+      return NextResponse.json({ success: false, error: 'Booking not found' }, { status: 404 })
+    }
+
+    // Reverse credit balance from overpayments, then delete payments and booking
+    const deleteAll = db.transaction(() => {
+      const payments = db.prepare(
+        'SELECT amount_due, amount_paid FROM payments WHERE booking_id = ?'
+      ).all(bookingId) as { amount_due: number; amount_paid: number }[]
+
+      const booking = db.prepare(
+        'SELECT client_id FROM bookings WHERE id = ?'
+      ).get(bookingId) as { client_id: number | null }
+
+      if (booking?.client_id) {
+        let totalExcess = 0
+        for (const p of payments) {
+          if (p.amount_paid > p.amount_due) {
+            totalExcess += p.amount_paid - p.amount_due
+          }
+        }
+        if (totalExcess > 0) {
+          db.prepare(
+            'UPDATE clients SET credit_balance = MAX(0, credit_balance - ?) WHERE id = ?'
+          ).run(totalExcess, booking.client_id)
+        }
+      }
+
+      db.prepare('DELETE FROM payments WHERE booking_id = ?').run(bookingId)
+      db.prepare('DELETE FROM bookings WHERE id = ?').run(bookingId)
+    })
+    deleteAll()
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to delete booking'
+    return NextResponse.json({ success: false, error: message }, { status: 500 })
+  }
+}

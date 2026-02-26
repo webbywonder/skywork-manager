@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
-import { generateClientId, toPaise } from '@/lib/utils'
+import { generateClientId } from '@/lib/utils'
 
 /**
  * GET /api/clients - List all clients with optional filters.
@@ -54,11 +54,11 @@ export async function POST(request: NextRequest) {
     const db = getDb()
     const body = await request.json()
 
-    const { name, company_name, phone, email, documents, package_type, seats, rate, join_date, notes } = body
+    const { name, company_name, phone, email, documents, join_date, notes } = body
 
-    if (!name || !phone || !package_type || !rate || !join_date) {
+    if (!name || !phone || !join_date) {
       return NextResponse.json(
-        { success: false, error: 'Name, phone, package type, rate, and join date are required' },
+        { success: false, error: 'Name, phone, and join date are required' },
         { status: 400 }
       )
     }
@@ -68,11 +68,10 @@ export async function POST(request: NextRequest) {
     ).get() as { last_num: number | null }
 
     const clientId = generateClientId(lastClient.last_num || 0)
-    const rateInPaise = toPaise(parseFloat(rate))
 
     const result = db.prepare(`
       INSERT INTO clients (client_id, name, company_name, phone, email, documents, package_type, seats, rate, join_date, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, 'Monthly', 1, 0, ?, ?)
     `).run(
       clientId,
       name,
@@ -80,9 +79,6 @@ export async function POST(request: NextRequest) {
       phone,
       email || null,
       documents || null,
-      package_type,
-      parseInt(seats, 10) || 1,
-      rateInPaise,
       join_date,
       notes || null
     )

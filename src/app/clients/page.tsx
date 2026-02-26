@@ -6,7 +6,7 @@ import Modal from '@/components/ui/Modal'
 import Badge from '@/components/ui/Badge'
 import ClientForm from '@/components/forms/ClientForm'
 import { useToast } from '@/components/ui/Toast'
-import { formatCurrency } from '@/lib/utils'
+import { formatDate } from '@/lib/utils'
 import type { Client } from '@/types'
 
 /**
@@ -110,9 +110,8 @@ export default function ClientsPage() {
                   <th className="text-left px-4 py-3 font-medium text-gray-600">ID</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Name</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Phone</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Package</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Rate</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Seats</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Email</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Join Date</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
                 </tr>
               </thead>
@@ -133,9 +132,8 @@ export default function ClientsPage() {
                       </Link>
                     </td>
                     <td className="px-4 py-3 text-gray-600">{client.phone}</td>
-                    <td className="px-4 py-3 text-gray-600">{client.package_type}</td>
-                    <td className="px-4 py-3 text-gray-600">{formatCurrency(client.rate)}</td>
-                    <td className="px-4 py-3 text-gray-600">{client.seats}</td>
+                    <td className="px-4 py-3 text-gray-600">{client.email || '-'}</td>
+                    <td className="px-4 py-3 text-gray-600">{formatDate(client.join_date)}</td>
                     <td className="px-4 py-3">
                       <Badge variant={statusBadgeVariant(client.status)}>{client.status}</Badge>
                     </td>

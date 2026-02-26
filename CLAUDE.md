@@ -1,157 +1,94 @@
-# SkyWork Manager
+# CLAUDE.md
 
-A minimal workspace management system for SkyWork Borivali co-working space.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Context
+## Project Overview
 
-Read `docs/PRD.md` for the full product requirements document. Read `docs/receipt-reference.html` for the existing receipt template that must be matched in styling and terms.
+SkyWork Manager - a local-only workspace management system for SkyWork Borivali co-working space. Single user, no authentication, runs on localhost.
+
+Read `docs/PRD.md` for full product requirements. Read `docs/receipt-reference.html` for the receipt styling reference.
+
+## Commands
+
+```bash
+npm run dev      # Start dev server (http://localhost:3000)
+npm run build    # Production build (includes TypeScript type checking)
+npm run lint     # ESLint
+```
+
+No test framework is configured yet. Verify changes via `npm run build` (catches type errors) and manual Playwright browser testing.
 
 ## Tech Stack
 
-- **Framework:** Next.js 14+ (App Router)
-- **Database:** SQLite via better-sqlite3 (no ORM, raw SQL is fine)
-- **Styling:** Tailwind CSS
-- **Language:** TypeScript
-- **Deployment:** Local only, runs on localhost
+- **Next.js 16** (App Router, Turbopack) with **React 19** and **TypeScript**
+- **SQLite** via better-sqlite3 (raw SQL, no ORM)
+- **Tailwind CSS v4** (utility classes only)
 
-## Project Structure
+## Architecture
+
+### Data Flow
+
+All pages are `'use client'` components that fetch data from API routes via `fetch()`. There are no React Server Components fetching data directly.
 
 ```
-skywork-manager/
-  src/
-    app/
-      layout.tsx            # Root layout with sidebar
-      page.tsx              # Dashboard
-      enquiries/
-        page.tsx            # Enquiries list
-      clients/
-        page.tsx            # Clients list
-        [id]/
-          page.tsx          # Client detail (tabbed)
-      bookings/
-        page.tsx            # Bookings list
-        [id]/
-          page.tsx          # Booking detail + payment ledger
-      deposits/
-        page.tsx            # Deposits list
-      expenses/
-        page.tsx            # Expenses list + recurring tab
-      settings/
-        page.tsx            # Business details, categories
-      api/
-        enquiries/
-        clients/
-        bookings/
-        payments/
-        deposits/
-        expenses/
-        receipts/
-        dashboard/
-    components/
-      layout/
-        Sidebar.tsx
-      ui/                   # Shared UI components (Table, Modal, Badge, Card, etc.)
-      forms/                # Form components per module
-    lib/
-      db.ts                 # SQLite connection + init
-      schema.sql            # Table creation SQL
-      seed.ts               # Optional seed data
-      utils.ts              # Shared helpers (date formatting, ID generation, etc.)
-    types/
-      index.ts              # TypeScript interfaces for all entities
-  docs/
-    PRD.md
-    receipt-reference.html
-  data/
-    skywork.db              # SQLite database file (gitignored)
+Page Component (client) → fetch('/api/...') → Route Handler → better-sqlite3 → SQLite
 ```
 
-## Architecture Decisions
+### API Route Pattern
 
-- **No ORM.** Use better-sqlite3 directly with raw SQL. Keep it simple.
-- **No authentication.** Single user, local system.
-- **Server-side data fetching** where possible using Next.js App Router conventions (Server Components + Route Handlers for mutations).
-- **API routes** for all create/update/delete operations. Use Next.js Route Handlers (`app/api/`).
-- **Forms** use standard React state + fetch to API routes. No form libraries needed.
-- **Modals** for quick create/edit forms. Full pages for detail views.
-- **SQLite DB file** lives in `data/skywork.db`. Auto-created on first run if missing.
+Route handlers live in `src/app/api/[module]/route.ts` (GET, POST) and `src/app/api/[module]/[id]/route.ts` (GET, PUT, DELETE). All return `{ success: boolean, data?: T, error?: string }`.
 
-## Database Conventions
+Next.js 16 route params are async: `const { id } = await context.params`.
 
-- All tables have `id` (INTEGER PRIMARY KEY AUTOINCREMENT), `created_at`, `updated_at`
-- `updated_at` is set via trigger or application code on every update
-- Display IDs (like SW-01, SW-250226-01) are generated in application code and stored as strings
-- Foreign keys are enforced (`PRAGMA foreign_keys = ON`)
-- Dates stored as ISO strings (YYYY-MM-DD)
-- Amounts stored as integers in paise/cents to avoid floating point issues (5000.00 = 500000)
+### Database
 
-## UI/UX Guidelines
+- **File:** `data/skywork.db` (auto-created on first run, gitignored)
+- **Schema:** `src/lib/schema.sql` — executed on every `getDb()` call (uses `CREATE TABLE IF NOT EXISTS`)
+- **Connection:** `src/lib/db.ts` — singleton pattern via `getDb()`
+- **Amounts in paise:** All monetary values stored as integers (Rs. 5,000 = 500000). Use `toPaise()` when writing, `toRupees()`/`formatCurrency()` when reading.
+- **Dates as ISO strings:** Stored as `TEXT` in YYYY-MM-DD format
+- **Display IDs:** Client `SW-NN`, Booking `SW-YYMMDD-NN`, Receipt `SW-YYMMDD-NN` — generated in app code, stored as strings
 
-- **Minimal and functional.** This is an internal tool, not a customer-facing product.
-- **SkyWork brand colour:** Primary blue `#1E5184`, gradient to `#4A90E2`
-- **Sidebar navigation** with icons. Collapsible on mobile.
-- **Tables** are the primary data display. Include search, filters, and pagination where needed.
-- **Status badges** with colour coding: green (active/paid), yellow (pending/partial), red (overdue/cancelled), grey (inactive/completed)
-- **Toast notifications** for success/error on form submissions.
-- **Confirmation dialogs** for destructive actions (delete, cancel booking, refund deposit).
-- Use Tailwind CSS utility classes only. No additional CSS frameworks.
+### Payment Model (Ledger-Based)
 
-## Key Business Logic
+Payments are a **simple ledger** — each entry is a standalone record of money received. No updating existing entries.
 
-### Recurring Billing Auto-generation
-When the dashboard loads (or "Generate Dues" button is pressed), call `POST /api/dashboard/generate-dues`:
-1. Fetch all active recurring bookings with their client join_date and rate
-2. For each booking, calculate the current billing cycle based on join_date
-3. Check if a `scheduled_due` payment already exists for that cycle
-4. If not, insert one with `amount_due = rate`, `amount_paid = 0`, `status = 'pending'`
-5. Also check for past cycles that might have been missed (e.g. if system wasn't opened for a month)
+- **"Log Payment"** always creates a new row in the `payments` table
+- Each payment stores: `amount_paid`, `payment_date`, `payment_method`, `payment_type` (advance/adhoc/scheduled_due)
+- **Total Due** is computed dynamically from the booking, NOT from payment rows:
+  - One-off: `rate × seats + GST`
+  - Recurring: `rate × seats + GST × months_elapsed`
+- **Balance** = computed total due - SUM(amount_paid from all payment entries)
+- The `amount_due` field on payment rows is only used for legacy scheduled_due entries
 
-### Overdue Logic
-A payment is overdue if: `status = 'pending'` AND `billing_period_start + 7 days < today`
+### Key Helpers (`src/lib/utils.ts`)
 
-### Credit Balance
-When a payment's `amount_paid > amount_due`, the excess is added to `clients.credit_balance`. This is display-only and not auto-applied to future dues.
+- `formatCurrency(paise)` → `"Rs. 5,000"` (Indian number formatting with lakhs/crores)
+- `toPaise(rupees)` / `toRupees(paise)` — conversion between storage and display
+- `formatDate(isoString)` → `"26 Feb 2026"`
+- `generateClientId()`, `generateBookingId()`, `generateReceiptNumber()`
 
-### Receipt Number Format
-`SW-YYMMDD-NN` where NN is a daily sequential counter.
+### UI Components
 
-## Implementation Order
+- `src/components/ui/Modal.tsx` — used for all create/edit forms
+- `src/components/ui/ConfirmDialog.tsx` — used for all destructive actions (delete, cancel)
+- `src/components/ui/Badge.tsx` — status badges (green/yellow/red/gray)
+- `src/components/ui/Toast.tsx` — success/error notifications via `useToast()` hook
+- `src/components/forms/` — one form component per module (ClientForm, BookingForm, PaymentForm, etc.)
 
-Follow the phases in `docs/PRD.md` Section 10. Build each phase completely before moving to the next:
-1. Project Setup & Database
-2. Clients
-3. Bookings & Payments
-4. Deposits
-5. Enquiries
-6. Expenses
-7. Receipts
-8. Dashboard & Reports
+## Business Rules
 
-## Important Notes
+- **Currency:** INR (Rs.) with Indian number formatting
+- **GST:** 18%, optional per booking (`gst_applicable` field). Calculated as `Math.round(baseAmount * 18 / 100)`
+- **Workspace capacity:** 13 seats (9 open + 4 cabin). Dashboard occupancy = SUM(seats) from active bookings
+- **Credit balance:** When total paid exceeds total due, excess shows as credit on client. Display-only, not auto-applied.
+- **Receipt:** Must match `docs/receipt-reference.html` styling exactly — blue gradient header, layout, terms & conditions word-for-word
+- **Brand colour:** Primary blue `#1E5184`
 
-- Currency is INR (Rs.). Display as "Rs. X,XXX" with Indian number formatting (commas at lakhs/crores).
-- The receipt HTML in `docs/receipt-reference.html` is the exact styling reference. Match the blue gradient header, layout structure, and terms & conditions word-for-word.
-- GST is 18% and is optional per booking (toggled via `gst_applicable` field).
-- Workspace capacity is 13 seats (9 open + 4 cabin). Used for occupancy calculation on dashboard.
-- Operating hours: 9 AM to 9 PM, Sunday off.
+## Module Notes
 
-## Autonomous Execution
-
-This project is designed to be built autonomously using the Ralph Wiggum plugin. Each phase should be fully functional before moving to the next.
-
-### Phase Completion Criteria
-
-After completing each phase:
-1. Run the dev server (`npm run dev`) and verify no build errors
-2. Test the relevant pages load correctly in the browser
-3. Test CRUD operations work for the module
-4. Commit the work with a descriptive message: `git commit -m "Phase N: [description]"`
-5. Only then move to the next phase
-
-### If Stuck
-
-After 10 iterations on the same error:
-1. Document what is blocking progress in `docs/BLOCKERS.md`
-2. List what was attempted
-3. Suggest alternative approaches
-4. Move on to the next phase if possible, or output `<promise>BLOCKED</promise>`
+- **Clients** don't store package/rate/seats — those belong to bookings
+- **Bookings** hold the rate, seats, package type, and GST flag
+- **Expenses** page has two tabs: one-off expenses and recurring expense management
+- **Dashboard** computes outstanding dues dynamically from bookings (rate × months - paid), not from payment rows
+- **Settings** page manages business details stored in the `settings` table as key-value pairs

@@ -28,21 +28,62 @@ export async function GET() {
       `SELECT COALESCE(SUM(amount_paid), 0) as total FROM payments WHERE payment_date LIKE ?`
     ).get(`${lastMonth}%`) as SummaryRow
 
-    // Outstanding dues (pending + overdue + partial)
-    const outstanding = db.prepare(
-      `SELECT COALESCE(SUM(amount_due - amount_paid), 0) as total FROM payments WHERE status IN ('Pending', 'Overdue', 'Partial')`
-    ).get() as SummaryRow
+    // Outstanding dues: computed from bookings (due - paid)
+    // For recurring: monthly_due × months_elapsed - total_paid
+    // For one-off: single_due - total_paid
+    interface BookingRow {
+      id: number
+      booking_id: string
+      type: string
+      rate: number
+      seats: number
+      gst_applicable: number
+      start_date: string
+      client_name: string | null
+      client_display_id: string | null
+    }
 
-    // Overdue payments list
-    const overduePayments = db.prepare(`
-      SELECT p.*, b.booking_id, c.name as client_name, c.client_id as client_display_id
-      FROM payments p
-      JOIN bookings b ON p.booking_id = b.id
+    const activeBookings = db.prepare(`
+      SELECT b.id, b.booking_id, b.type, b.rate, b.seats, b.gst_applicable, b.start_date,
+             c.name as client_name, c.client_id as client_display_id
+      FROM bookings b
       LEFT JOIN clients c ON b.client_id = c.id
-      WHERE p.status IN ('Overdue', 'Pending', 'Partial')
-      ORDER BY p.billing_period_start ASC
-      LIMIT 20
-    `).all()
+      WHERE b.status = 'Active'
+    `).all() as BookingRow[]
+
+    let outstandingTotal = 0
+    const overdueList: { booking_id: string; client_name: string | null; client_display_id: string | null; balance: number }[] = []
+
+    for (const b of activeBookings) {
+      const baseMonthly = b.rate * b.seats
+      const gstMonthly = b.gst_applicable ? Math.round(baseMonthly * 18 / 100) : 0
+      const monthlyDue = baseMonthly + gstMonthly
+
+      let totalDue = monthlyDue
+      if (b.type === 'recurring') {
+        const start = new Date(b.start_date)
+        const monthsElapsed = (now.getFullYear() - start.getFullYear()) * 12
+          + (now.getMonth() - start.getMonth()) + 1
+        totalDue = monthlyDue * Math.max(1, monthsElapsed)
+      }
+
+      const paidRow = db.prepare(
+        'SELECT COALESCE(SUM(amount_paid), 0) as total FROM payments WHERE booking_id = ?'
+      ).get(b.id) as SummaryRow
+
+      const balance = totalDue - paidRow.total
+      if (balance > 0) {
+        outstandingTotal += balance
+        overdueList.push({
+          booking_id: b.booking_id,
+          client_name: b.client_name,
+          client_display_id: b.client_display_id,
+          balance,
+        })
+      }
+    }
+
+    const overduePayments = overdueList
 
     // Active seats (sum of seats from active bookings)
     const occupancy = db.prepare(
@@ -76,7 +117,7 @@ export async function GET() {
           thisMonth: revenueThisMonth.total,
           lastMonth: revenueLastMonth.total,
         },
-        outstanding: outstanding.total,
+        outstanding: outstandingTotal,
         overduePayments,
         occupancy: {
           filled: occupancy.total,

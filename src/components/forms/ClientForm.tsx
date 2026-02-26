@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import type { Client } from '@/types'
-import { toRupees } from '@/lib/utils'
 
 interface ClientFormProps {
   client?: Client
@@ -10,18 +9,9 @@ interface ClientFormProps {
   onCancel: () => void
 }
 
-const PACKAGE_TYPES = ['Daily', 'Weekly', '15-Day', 'Monthly', 'Private Cabin'] as const
-
-const DEFAULT_RATES: Record<string, string> = {
-  'Daily': '250',
-  'Weekly': '1500',
-  '15-Day': '3000',
-  'Monthly': '5000',
-  'Private Cabin': '10000',
-}
-
 /**
  * Form for creating or editing a client.
+ * Package, seats, and rate are managed at booking level, not client level.
  */
 export default function ClientForm({ client, onSubmit, onCancel }: ClientFormProps) {
   const [form, setForm] = useState({
@@ -30,9 +20,6 @@ export default function ClientForm({ client, onSubmit, onCancel }: ClientFormPro
     phone: client?.phone || '',
     email: client?.email || '',
     documents: client?.documents || '',
-    package_type: client?.package_type || 'Monthly',
-    seats: client?.seats?.toString() || '1',
-    rate: client ? toRupees(client.rate).toString() : DEFAULT_RATES['Monthly'],
     join_date: client?.join_date || new Date().toISOString().split('T')[0],
     status: client?.status || 'Active',
     notes: client?.notes || '',
@@ -40,13 +27,7 @@ export default function ClientForm({ client, onSubmit, onCancel }: ClientFormPro
   const [submitting, setSubmitting] = useState(false)
 
   const handleChange = (field: string, value: string) => {
-    const updates: Record<string, string> = { [field]: value }
-
-    if (field === 'package_type' && !client) {
-      updates.rate = DEFAULT_RATES[value] || form.rate
-    }
-
-    setForm(prev => ({ ...prev, ...updates }))
+    setForm(prev => ({ ...prev, [field]: value }))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -97,39 +78,6 @@ export default function ClientForm({ client, onSubmit, onCancel }: ClientFormPro
             type="email"
             value={form.email}
             onChange={e => handleChange('email', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1E5184] focus:border-transparent outline-none"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Package Type *</label>
-          <select
-            value={form.package_type}
-            onChange={e => handleChange('package_type', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1E5184] focus:border-transparent outline-none"
-          >
-            {PACKAGE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Seats *</label>
-          <input
-            type="number"
-            min="1"
-            required
-            value={form.seats}
-            onChange={e => handleChange('seats', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1E5184] focus:border-transparent outline-none"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Rate (Rs.) *</label>
-          <input
-            type="number"
-            min="0"
-            step="1"
-            required
-            value={form.rate}
-            onChange={e => handleChange('rate', e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1E5184] focus:border-transparent outline-none"
           />
         </div>

@@ -30,7 +30,9 @@ export default function ExpensesPage() {
   const [monthFilter, setMonthFilter] = useState(new Date().toISOString().slice(0, 7))
   const [showNewExpense, setShowNewExpense] = useState(false)
   const [showNewRecurring, setShowNewRecurring] = useState(false)
+  const [editRecurring, setEditRecurring] = useState<RecurringExpense | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
+  const [deleteRecurringId, setDeleteRecurringId] = useState<number | null>(null)
   const { showToast } = useToast()
 
   const [expenseForm, setExpenseForm] = useState({
@@ -124,6 +126,57 @@ export default function ExpensesPage() {
       setDeleteId(null)
       fetchExpenses()
     }
+  }
+
+  const handleEditRecurring = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editRecurring) return
+    try {
+      const res = await fetch(`/api/expenses/recurring/${editRecurring.id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...recurringForm, status: editRecurring.status }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        showToast('success', 'Recurring expense updated')
+        setEditRecurring(null)
+        fetchRecurring()
+      } else {
+        showToast('error', json.error || 'Failed to update')
+      }
+    } catch {
+      showToast('error', 'Network error: Failed to update')
+    }
+  }
+
+  const handleDeleteRecurring = async () => {
+    if (!deleteRecurringId) return
+    try {
+      const res = await fetch(`/api/expenses/recurring/${deleteRecurringId}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (json.success) {
+        showToast('success', 'Recurring expense deleted')
+        setDeleteRecurringId(null)
+        fetchRecurring()
+      } else {
+        showToast('error', json.error || 'Failed to delete')
+      }
+    } catch {
+      showToast('error', 'Network error: Failed to delete')
+    }
+  }
+
+  const openEditRecurring = (rec: RecurringExpense) => {
+    setRecurringForm({
+      category: rec.category,
+      description: rec.description,
+      amount: (rec.amount / 100).toString(),
+      frequency: rec.frequency,
+      next_due_date: rec.next_due_date,
+      auto_remind: rec.auto_remind === 1,
+      notes: rec.notes || '',
+    })
+    setEditRecurring(rec)
   }
 
   const monthTotal = expenses.reduce((sum, e) => sum + e.amount, 0)
@@ -239,6 +292,7 @@ export default function ExpensesPage() {
                     <th className="text-left px-4 py-3 font-medium text-gray-600">Frequency</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600">Next Due</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -251,6 +305,12 @@ export default function ExpensesPage() {
                       <td className="px-4 py-3 text-gray-600">{formatDate(rec.next_due_date)}</td>
                       <td className="px-4 py-3">
                         <Badge variant={rec.status === 'Active' ? 'green' : 'gray'}>{rec.status}</Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2">
+                          <button onClick={() => openEditRecurring(rec)} className="text-[#1E5184] hover:underline text-sm">Edit</button>
+                          <button onClick={() => setDeleteRecurringId(rec.id)} className="text-red-500 hover:underline text-sm">Delete</button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -350,6 +410,64 @@ export default function ExpensesPage() {
         variant="danger"
         onConfirm={handleDelete}
         onCancel={() => setDeleteId(null)}
+      />
+
+      {/* Edit Recurring Modal */}
+      <Modal isOpen={!!editRecurring} onClose={() => setEditRecurring(null)} title="Edit Recurring Expense">
+        <form onSubmit={handleEditRecurring} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
+              <select value={recurringForm.category} onChange={e => setRecurringForm(prev => ({ ...prev, category: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1E5184] focus:border-transparent outline-none">
+                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Frequency *</label>
+              <select value={recurringForm.frequency} onChange={e => setRecurringForm(prev => ({ ...prev, frequency: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1E5184] focus:border-transparent outline-none">
+                {FREQUENCIES.map(f => <option key={f} value={f}>{f}</option>)}
+              </select>
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
+              <input type="text" required value={recurringForm.description} onChange={e => setRecurringForm(prev => ({ ...prev, description: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1E5184] focus:border-transparent outline-none" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Amount (Rs.) *</label>
+              <input type="number" required min="0" value={recurringForm.amount} onChange={e => setRecurringForm(prev => ({ ...prev, amount: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1E5184] focus:border-transparent outline-none" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Next Due Date *</label>
+              <input type="date" required value={recurringForm.next_due_date} onChange={e => setRecurringForm(prev => ({ ...prev, next_due_date: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1E5184] focus:border-transparent outline-none" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+              <select value={editRecurring?.status || 'Active'} onChange={e => setEditRecurring(prev => prev ? { ...prev, status: e.target.value as 'Active' | 'Paused' } : null)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1E5184] focus:border-transparent outline-none">
+                <option value="Active">Active</option>
+                <option value="Paused">Paused</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+            <textarea rows={2} value={recurringForm.notes} onChange={e => setRecurringForm(prev => ({ ...prev, notes: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1E5184] focus:border-transparent outline-none" />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={() => setEditRecurring(null)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+            <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-[#1E5184] rounded-lg hover:bg-[#174068]">Update Recurring</button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Delete Recurring Confirmation */}
+      <ConfirmDialog
+        isOpen={!!deleteRecurringId}
+        title="Delete Recurring Expense"
+        message="Are you sure you want to delete this recurring expense? This will not remove already-generated expenses."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={handleDeleteRecurring}
+        onCancel={() => setDeleteRecurringId(null)}
       />
     </div>
   )

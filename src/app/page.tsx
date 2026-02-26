@@ -10,14 +10,10 @@ interface DashboardData {
   revenue: { thisMonth: number; lastMonth: number }
   outstanding: number
   overduePayments: Array<{
-    id: number
     booking_id: string
     client_name: string | null
     client_display_id: string | null
-    amount_due: number
-    amount_paid: number
-    billing_period_start: string | null
-    status: string
+    balance: number
   }>
   occupancy: { filled: number; total: number }
   expenses: number
@@ -89,7 +85,7 @@ export default function DashboardPage() {
             disabled={generating}
             className="px-4 py-2 text-sm font-medium text-white bg-[#1E5184] rounded-lg hover:bg-[#174068] disabled:opacity-50"
           >
-            {generating ? 'Generating...' : 'Generate Dues'}
+            {generating ? 'Checking...' : 'Check Overdue'}
           </button>
         </div>
       </div>
@@ -112,7 +108,7 @@ export default function DashboardPage() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Outstanding Dues</h3>
           <p className="text-3xl font-bold text-yellow-600 mt-2">{formatCurrency(data.outstanding)}</p>
-          <p className="text-sm text-gray-500 mt-1">{data.overduePayments.length} payment(s) pending</p>
+          <p className="text-sm text-gray-500 mt-1">{data.overduePayments.length} booking(s) with balance</p>
         </div>
 
         {/* Occupancy */}
@@ -185,16 +181,12 @@ export default function DashboardPage() {
                 <tr>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Client</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Booking</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Period</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Due</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Paid</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Balance</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Balance Due</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {data.overduePayments.map(p => (
-                  <tr key={p.id} className="hover:bg-gray-50">
+                  <tr key={p.booking_id} className="hover:bg-gray-50">
                     <td className="px-4 py-3">
                       {p.client_name || 'Walk-in'}
                       {p.client_display_id && (
@@ -202,18 +194,8 @@ export default function DashboardPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-gray-600">{p.booking_id}</td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {p.billing_period_start ? formatDate(p.billing_period_start) : '-'}
-                    </td>
-                    <td className="px-4 py-3">{formatCurrency(p.amount_due)}</td>
-                    <td className="px-4 py-3 text-green-600">{formatCurrency(p.amount_paid)}</td>
                     <td className="px-4 py-3 font-medium text-red-600">
-                      {formatCurrency(p.amount_due - p.amount_paid)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant={p.status === 'Overdue' ? 'red' : p.status === 'Partial' ? 'yellow' : 'gray'}>
-                        {p.status}
-                      </Badge>
+                      {formatCurrency(p.balance)}
                     </td>
                   </tr>
                 ))}
