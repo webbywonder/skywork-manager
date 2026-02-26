@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SkyWork Borivali - Booking Receipt</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f9f9f9;
+            margin: 0;
+            padding: 0;
+        }
+        .receipt-container {
+            max-width: 800px;
+            margin: 20px auto;
+            background: white;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .receipt-header {
+            background: linear-gradient(135deg, #1E5184 0%, #4A90E2 100%);
+            color: white;
+            padding: 25px;
+        }
+        .receipt-logo-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .receipt-logo {
+            display: flex;
+            align-items: center;
+        }
+        .receipt-logo-icon {
+            background-color: white;
+            color: #1E5184;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            margin-right: 15px;
+            font-size: 24px;
+        }
+        .invoice-title {
+            text-align: right;
+        }
+        .receipt-title {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .receipt-subtitle {
+            margin: 5px 0 0;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        .receipt-body {
+            padding: 30px;
+        }
+        .receipt-section {
+            margin-bottom: 25px;
+        }
+        .receipt-section:last-child {
+            margin-bottom: 0;
+        }
+        .receipt-section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1E5184;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+        }
+        .receipt-row {
+            display: flex;
+            margin-bottom: 8px;
+        }
+        .receipt-label {
+            flex: 1;
+            font-weight: 500;
+            color: #555;
+        }
+        .receipt-value {
+            flex: 2;
+        }
+        .calendar {
+            display: flex;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+            background-color: #f5f9ff;
+            border-radius: 6px;
+            padding: 10px;
+        }
+        .calendar-day {
+            width: calc(20% - 10px);
+            text-align: center;
+            margin: 5px;
+            padding: 8px 0;
+            background-color: #e1e9f8;
+            border-radius: 4px;
+        }
+        .calendar-day.booked {
+            background-color: #1E5184;
+            color: white;
+            font-weight: 500;
+        }
+        .payment-summary {
+            background-color: #f5f9ff;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 10px;
+        }
+        .payment-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        .payment-row.total {
+            font-weight: 700;
+            font-size: 18px;
+            border-top: 1px dashed #bbd1e8;
+            padding-top: 8px;
+            margin-top: 8px;
+            color: #1E5184;
+        }
+        .terms {
+            font-size: 12px;
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-radius: 6px;
+        }
+        .terms ul {
+            padding-left: 20px;
+            margin: 10px 0;
+        }
+        .terms li {
+            margin-bottom: 5px;
+        }
+        .receipt-footer {
+            text-align: center;
+            padding: 20px;
+            background-color: #f0f4f8;
+            font-size: 14px;
+        }
+        .receipt-footer p {
+            margin: 5px 0;
+        }
+        .highlight {
+            color: #1E5184;
+            font-weight: 600;
+        }
+        .thank-you {
+            text-align: center;
+            margin: 25px 0 15px;
+            color: #1E5184;
+            font-weight: 600;
+            font-size: 18px;
+        }
+        .contact-details {
+            margin-top: 15px;
+            text-align: center;
+            font-size: 13px;
+            color: #666;
+        }
+        .computer-generated {
+            font-style: italic;
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+            margin-top: 20px;
+        }
+        .parties {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .party {
+            width: 48%;
+            padding: 15px;
+            background-color: #f5f9ff;
+            border-radius: 6px;
+        }
+        .party-title {
+            font-weight: 600;
+            color: #1E5184;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        .party-details {
+            font-size: 13px;
+        }
+        /* .gst-highlight {
+            background-color: #fffde7;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-weight: 500;
+        } */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        th {
+            background-color: #1E5184;
+            color: white;
+            padding: 10px;
+            text-align: left;
+            font-size: 14px;
+        }
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            font-size: 14px;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .text-right {
+            text-align: right;
+        }
+        .gst-note {
+            font-style: italic;
+            color: #555;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+        .print-button {
+            background-color: #1E5184;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            margin: 20px auto 0;
+            transition: background-color 0.3s;
+        }
+        .print-button:hover {
+            background-color: #0f3b69;
+        }
+        .print-icon {
+            margin-right: 8px;
+        }
+        @media print {
+            body {
+                background: white;
+            }
+            .receipt-container {
+                box-shadow: none;
+                margin: 0;
+            }
+            .print-button {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="receipt-container">
+        <div class="receipt-header">
+            <div class="receipt-logo-section">
+                <div class="receipt-logo">
+                    <div class="receipt-logo-icon">SW</div>
+                    <div>
+                        <h1 class="receipt-title">SKYWORK BORIVALI</h1>
+                        <p class="receipt-subtitle">Elevate Your Workday</p>
+                    </div>
+                </div>
+                <div class="invoice-title">
+                    <h2>BOOKING RECEIPT</h2>
+                    <div>Receipt No: SW-250425-01</div>
+                    <div>Date: April 7, 2025</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="receipt-body">
+            <div class="parties">
+                <div class="party">
+                    <div class="party-title">SERVICE PROVIDER</div>
+                    <div class="party-details">
+                        <strong>Webby Wonder</strong> (operating as SkyWork Borivali)<br>
+                        5TH FLOOR, 514, PRIDE OF KALINA, KOLIVERY VILLAGE<br>
+                        ROAD, KALINA, SANTACRUZ EAST, Mumbai Suburban,<br>
+                        Maharashtra, 400055<br><br>
+                        <span class="gst-highlight">GSTIN: 27AWPPG3553P1ZU</span><br>
+                        Contact: +91 9029208698<br>
+                        Email: gadadarshan@gmail.com
+                    </div>
+                </div>
+                <div class="party">
+                    <div class="party-title">CUSTOMER</div>
+                    <div class="party-details">
+                        <strong>Nushu Healthcare Pvt Ltd</strong><br>
+                        264-265, Dr Annie Besant Rd, Municipal Colony,<br>
+                        Worli Shivaji Nagar, Worli,<br>
+                        Mumbai, Maharashtra 400030<br><br>
+                        <span class="gst-highlight">GSTIN: 27AAICN5311J1ZE</span><br>
+                        Contact: +91 70214 29318<br>
+                        Email: NA
+                    </div>
+                </div>
+            </div>
+
+            <div class="receipt-section">
+                <h3 class="receipt-section-title">SERVICE DETAILS</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th width="60%">Description</th>
+                            <th>Qty</th>
+                            <th>Rate</th>
+                            <th>Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Daily Co-working Space (2 seats)<br>
+                                <small>Dates: Apr 9, 10, 11, 14, 15, 2025</small>
+                            </td>
+                            <td>5 days</td>
+                            <td>₹500.00</td>
+                            <td class="text-right">₹2,500.00</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="calendar">
+                <div class="calendar-day booked">
+                    Apr 9<br/><small>Wed</small>
+                </div>
+                <div class="calendar-day booked">
+                    Apr 10<br/><small>Thu</small>
+                </div>
+                <div class="calendar-day booked">
+                    Apr 11<br/><small>Fri</small>
+                </div>
+                <div class="calendar-day booked">
+                    Apr 14<br/><small>Mon</small>
+                </div>
+                <div class="calendar-day booked">
+                    Apr 15<br/><small>Tue</small>
+                </div>
+            </div>
+
+            <div class="receipt-section">
+                <h3 class="receipt-section-title">PAYMENT SUMMARY</h3>
+                <div class="payment-summary">
+                    <div class="payment-row">
+                        <div>Amount:</div>
+                        <div></div>
+                        <div>₹2,500.00 <small>(+18% GST extra)</small></div>
+                    </div>
+                    <div class="payment-row">
+                        <div>Advance Payment Received:</div>
+                        <div></div>
+                        <div>₹1,000.00</div>
+                    </div>
+                    <div class="payment-row total">
+                        <div>Balance Due (on first day of usage):</div>
+                        <div></div>
+                        <div>₹1,950.00 <small>(including GST)</small></div>
+                    </div>
+                    <div class="receipt-row">
+                        <div class="receipt-label">Payment Method:</div>
+                        <div class="receipt-value">UPI #102753840911</div>
+                    </div>
+                    <div class="receipt-row">
+                        <div class="receipt-label">Payment Date:</div>
+                        <div class="receipt-value">April 7, 2025</div>
+                    </div>
+                    <div class="gst-note">* GST invoice will be provided when payment is made in full.</div>
+                </div>
+            </div>
+
+            <div class="receipt-section">
+                <h3 class="receipt-section-title">TERMS & CONDITIONS</h3>
+                <div class="terms">
+                    <ul>
+                        <li>Balance payment must be made on or before April 9, 2025</li>
+                        <li>Working hours: 9:00 AM to 9:00 PM</li>
+                        <li>Please carry valid ID proof</li>
+                        <li>Free WiFi and basic amenities included</li>
+                        <li>No refunds for unused days</li>
+                        <li>Rescheduling requires 24 hours advance notice</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="thank-you">
+                Thank you for choosing SkyWork Borivali!
+            </div>
+
+            <div class="computer-generated">
+                This is a computer-generated receipt and does not require signature.
+            </div>
+        </div>
+
+        <div class="receipt-footer">
+            <p class="highlight">SKYWORK BORIVALI</p>
+            <p>1502, Om Siddhivinayak SRA CHS Ltd, Carter Road No. 1,<br>
+            Near Borivali Railway Station, Behind Kasturba Road Police Station,<br>
+            PBC Building Gate No. 2, Borivali East, Mumbai, Maharashtra 400066</p>
+
+            <div class="contact-details">
+                <p>Contact: +91 9029208698 | Email: gadadarshan@gmail.com</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- <button onclick="window.print();" class="print-button">
+        <span class="print-icon">🖨️</span> Print as PDF
+    </button> -->
+</body>
+</html>
