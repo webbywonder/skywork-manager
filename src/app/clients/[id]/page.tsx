@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
 import ClientForm from '@/components/forms/ClientForm'
 import { useToast } from '@/components/ui/Toast'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import type { Client } from '@/types'
+import type { Client, BookingWithClient, DepositWithClient } from '@/types'
 
 type TabId = 'overview' | 'bookings' | 'deposit'
 
@@ -19,6 +20,8 @@ export default function ClientDetailPage() {
   const router = useRouter()
   const { showToast } = useToast()
   const [client, setClient] = useState<Client | null>(null)
+  const [bookings, setBookings] = useState<BookingWithClient[]>([])
+  const [deposits, setDeposits] = useState<DepositWithClient[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabId>('overview')
   const [showEditModal, setShowEditModal] = useState(false)
@@ -32,7 +35,17 @@ export default function ClientDetailPage() {
       } else {
         showToast('error', 'Client not found')
         router.push('/clients')
+        return
       }
+      // Fetch bookings
+      const bookingsRes = await fetch(`/api/bookings?client_id=${params.id}`)
+      const bookingsJson = await bookingsRes.json()
+      if (bookingsJson.success) setBookings(bookingsJson.data)
+
+      // Fetch deposits
+      const depositsRes = await fetch(`/api/deposits?client_id=${params.id}`)
+      const depositsJson = await depositsRes.json()
+      if (depositsJson.success) setDeposits(depositsJson.data)
     } catch (error) {
       showToast('error', 'Failed to load client')
     } finally {
@@ -180,14 +193,88 @@ export default function ClientDetailPage() {
       )}
 
       {activeTab === 'bookings' && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <p className="text-gray-500">Bookings & Payments will be available in Phase 3.</p>
+        <div className="space-y-4">
+          {bookings.length === 0 ? (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center text-gray-500">
+              No bookings found for this client.
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="text-left px-4 py-3 font-medium text-gray-600">Booking ID</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-600">Type</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-600">Package</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-600">Rate</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-600">Start</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {bookings.map(b => (
+                      <tr key={b.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3">
+                          <Link href={`/bookings/${b.id}`} className="text-[#1E5184] font-medium hover:underline">
+                            {b.booking_id}
+                          </Link>
+                        </td>
+                        <td className="px-4 py-3 capitalize">{b.type}</td>
+                        <td className="px-4 py-3">{b.package}</td>
+                        <td className="px-4 py-3">{formatCurrency(b.rate)}</td>
+                        <td className="px-4 py-3 text-gray-600">{formatDate(b.start_date)}</td>
+                        <td className="px-4 py-3">
+                          <Badge variant={b.status === 'Active' ? 'green' : b.status === 'Cancelled' ? 'red' : 'gray'}>
+                            {b.status}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {activeTab === 'deposit' && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <p className="text-gray-500">Deposit details will be available in Phase 4.</p>
+        <div className="space-y-4">
+          {deposits.length === 0 ? (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center text-gray-500">
+              No deposits found for this client.
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="text-left px-4 py-3 font-medium text-gray-600">Amount</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-600">Received</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-600">Method</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-600">Refund Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {deposits.map(d => (
+                      <tr key={d.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 font-medium">{formatCurrency(d.amount)}</td>
+                        <td className="px-4 py-3 text-gray-600">{formatDate(d.received_date)}</td>
+                        <td className="px-4 py-3 text-gray-600">{d.payment_method}</td>
+                        <td className="px-4 py-3">
+                          <Badge variant={d.status === 'Held' ? 'blue' : 'gray'}>{d.status}</Badge>
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">{d.refund_date ? formatDate(d.refund_date) : '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
