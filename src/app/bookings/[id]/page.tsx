@@ -52,6 +52,7 @@ export default function BookingDetailPage() {
   const [showDeleteBooking, setShowDeleteBooking] = useState(false)
   const [showExtraModal, setShowExtraModal] = useState(false)
   const [deleteExtra, setDeleteExtra] = useState<BookingExtra | null>(null)
+  const [showStatusConfirm, setShowStatusConfirm] = useState<'Completed' | 'Cancelled' | null>(null)
 
   const fetchBooking = useCallback(async () => {
     try {
@@ -182,6 +183,30 @@ export default function BookingDetailPage() {
     }
   }
 
+  /**
+   * Updates the booking status to Completed or Cancelled.
+   */
+  const handleStatusChange = async () => {
+    if (!showStatusConfirm) return
+    try {
+      const res = await fetch(`/api/bookings/${params.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: showStatusConfirm }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        showToast('success', `Booking marked as ${showStatusConfirm}`)
+        setShowStatusConfirm(null)
+        fetchBooking()
+      } else {
+        showToast('error', json.error || 'Failed to update status')
+      }
+    } catch {
+      showToast('error', 'Network error: Failed to update status')
+    }
+  }
+
   if (loading) return <div className="text-gray-500">Loading...</div>
   if (!booking) return <div className="text-gray-500">Booking not found</div>
 
@@ -225,19 +250,37 @@ export default function BookingDetailPage() {
             {booking.client_client_id && ` (${booking.client_client_id})`}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {booking.status === 'Active' && (
+            <>
+              <button
+                onClick={() => setShowStatusConfirm('Completed')}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Mark Completed
+              </button>
+              <button
+                onClick={() => setShowStatusConfirm('Cancelled')}
+                className="px-4 py-2 text-sm font-medium text-red-600 bg-white border border-red-300 rounded-lg hover:bg-red-50"
+              >
+                Cancel Booking
+              </button>
+            </>
+          )}
           <button
             onClick={() => setShowDeleteBooking(true)}
             className="px-4 py-2 text-sm font-medium text-red-600 bg-white border border-red-300 rounded-lg hover:bg-red-50"
           >
-            Delete Booking
+            Delete
           </button>
-          <button
-            onClick={() => setShowPaymentModal(true)}
-            className="px-4 py-2 text-sm font-medium text-white bg-[#1E5184] rounded-lg hover:bg-[#174068]"
-          >
-            + Log Payment
-          </button>
+          {booking.status === 'Active' && (
+            <button
+              onClick={() => setShowPaymentModal(true)}
+              className="px-4 py-2 text-sm font-medium text-white bg-[#1E5184] rounded-lg hover:bg-[#174068]"
+            >
+              + Log Payment
+            </button>
+          )}
         </div>
       </div>
 
@@ -499,6 +542,20 @@ export default function BookingDetailPage() {
         variant="danger"
         onConfirm={handleDeleteExtra}
         onCancel={() => setDeleteExtra(null)}
+      />
+
+      {/* Status Change Confirmation */}
+      <ConfirmDialog
+        isOpen={!!showStatusConfirm}
+        title={showStatusConfirm === 'Completed' ? 'Complete Booking' : 'Cancel Booking'}
+        message={showStatusConfirm === 'Completed'
+          ? `Mark booking ${booking.booking_id} as completed? This will stop accruing dues.`
+          : `Cancel booking ${booking.booking_id}? This will stop accruing dues. Any outstanding balance will remain.`
+        }
+        confirmLabel={showStatusConfirm === 'Completed' ? 'Mark Completed' : 'Cancel Booking'}
+        variant={showStatusConfirm === 'Cancelled' ? 'danger' : 'default'}
+        onConfirm={handleStatusChange}
+        onCancel={() => setShowStatusConfirm(null)}
       />
     </div>
   )
