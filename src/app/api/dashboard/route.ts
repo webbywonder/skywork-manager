@@ -110,6 +110,32 @@ export async function GET() {
       `SELECT COUNT(*) as total FROM enquiries WHERE status IN ('New', 'Contacted', 'Follow-up') AND follow_up_date <= date('now', '+7 days')`
     ).get() as SummaryRow
 
+    // Upcoming renewals (due in next 30 days, Active only)
+    const thirtyDaysFromNow = new Date()
+    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30)
+    const thirtyDaysStr = thirtyDaysFromNow.toISOString().split('T')[0]
+    const todayStr = now.toISOString().split('T')[0]
+    const currentYear = now.getFullYear()
+
+    const upcomingRenewals = db.prepare(`
+      SELECT r.id, r.domain_name, r.client_name, r.client_rate, r.renewal_date
+      FROM renewals r
+      WHERE r.status = 'Active'
+        AND r.renewal_date <= ?
+        AND r.renewal_date >= ?
+        AND NOT EXISTS (SELECT 1 FROM renewal_payments rp WHERE rp.renewal_id = r.id AND rp.year = ?)
+      ORDER BY r.renewal_date ASC
+    `).all(thirtyDaysStr, todayStr, currentYear) as Array<{ id: number; domain_name: string; client_name: string; client_rate: number; renewal_date: string }>
+
+    const overdueRenewals = db.prepare(`
+      SELECT r.id, r.domain_name, r.client_name, r.client_rate, r.renewal_date
+      FROM renewals r
+      WHERE r.status = 'Active'
+        AND r.renewal_date < ?
+        AND NOT EXISTS (SELECT 1 FROM renewal_payments rp WHERE rp.renewal_id = r.id AND rp.year = ?)
+      ORDER BY r.renewal_date ASC
+    `).all(todayStr, currentYear) as Array<{ id: number; domain_name: string; client_name: string; client_rate: number; renewal_date: string }>
+
     return NextResponse.json({
       success: true,
       data: {
@@ -128,6 +154,10 @@ export async function GET() {
         activeClients: activeClients.total,
         pendingFollowUps: pendingFollowUps.total,
         profitLoss: revenueThisMonth.total - expensesThisMonth.total,
+        renewals: {
+          upcoming: upcomingRenewals,
+          overdue: overdueRenewals,
+        },
       },
     })
   } catch (error) {

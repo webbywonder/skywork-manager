@@ -21,6 +21,22 @@ interface DashboardData {
   activeClients: number
   pendingFollowUps: number
   profitLoss: number
+  renewals: {
+    upcoming: Array<{
+      id: number
+      domain_name: string
+      client_name: string
+      client_rate: number
+      renewal_date: string
+    }>
+    overdue: Array<{
+      id: number
+      domain_name: string
+      client_name: string
+      client_rate: number
+      renewal_date: string
+    }>
+  }
 }
 
 /**
@@ -161,6 +177,43 @@ export default function DashboardPage() {
           <p className="text-sm font-medium text-gray-700">Active Clients</p>
         </Link>
       </div>
+
+      {/* Upcoming Renewals */}
+      {(data.renewals.overdue.length > 0 || data.renewals.upcoming.length > 0) && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
+          <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Renewals</h2>
+              <p className="text-sm text-gray-500 mt-0.5">
+                {data.renewals.upcoming.length} upcoming &middot; {data.renewals.overdue.length} overdue
+              </p>
+            </div>
+            <Link href="/renewals" className="text-sm text-[#1E5184] hover:underline font-medium">
+              View All &rarr;
+            </Link>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {data.renewals.overdue.map(r => (
+              <div key={r.id} className="px-4 py-3 text-sm text-red-600 flex items-start gap-2">
+                <span className="shrink-0">&#9888;</span>
+                <span>
+                  <span className="font-medium">{r.domain_name}</span>
+                  {' '}&mdash; {r.client_name} &mdash; {formatCurrency(r.client_rate)} &mdash; overdue since {formatDate(r.renewal_date)}
+                </span>
+              </div>
+            ))}
+            {data.renewals.upcoming.map(r => (
+              <div key={r.id} className="px-4 py-3 text-sm text-gray-700 flex items-start gap-2">
+                <span className="shrink-0">&nbsp;&nbsp;</span>
+                <span>
+                  <span className="font-medium">{r.domain_name}</span>
+                  {' '}&mdash; {r.client_name} &mdash; {formatCurrency(r.client_rate)} &mdash; due {formatDate(r.renewal_date)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Outstanding Dues Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
