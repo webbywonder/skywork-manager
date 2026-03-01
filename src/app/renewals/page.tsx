@@ -1,16 +1,16 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import Modal from '@/components/ui/Modal'
 import Badge from '@/components/ui/Badge'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import { useToast } from '@/components/ui/Toast'
 import { formatCurrency, formatDate, toRupees } from '@/lib/utils'
-import type { Renewal, PaymentMethod } from '@/types'
+import type { Renewal } from '@/types'
 
-const SERVICES = ['Domain', 'Domain + Hosting', 'Domain + Hosting + Email'] as const
+const SERVICES = ['Domain', 'Hosting', 'Domain + Hosting', 'Domain + Hosting + Email', 'SMS', 'WhatsApp'] as const
 const STATUSES = ['Active', 'Discontinued', 'Managed by Other'] as const
-const PAYMENT_METHODS: PaymentMethod[] = ['UPI', 'Cash', 'Bank Transfer', 'GPay']
 
 interface RenewalWithPaymentStatus extends Renewal {
   paid_this_year: number
@@ -27,14 +27,6 @@ const defaultRenewalForm = {
   notes: '',
 }
 
-const defaultPaymentForm = {
-  amount_paid: '',
-  payment_date: new Date().toISOString().split('T')[0],
-  payment_method: 'UPI' as string,
-  year: new Date().getFullYear().toString(),
-  notes: '',
-}
-
 /**
  * Renewals page with CRUD operations and payment logging for domain/hosting renewals.
  */
@@ -42,12 +34,12 @@ export default function RenewalsPage() {
   const [renewals, setRenewals] = useState<RenewalWithPaymentStatus[]>([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<'Active' | 'all'>('Active')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [serviceFilter, setServiceFilter] = useState('all')
   const [showAddModal, setShowAddModal] = useState(false)
   const [editRenewal, setEditRenewal] = useState<RenewalWithPaymentStatus | null>(null)
-  const [paymentRenewal, setPaymentRenewal] = useState<RenewalWithPaymentStatus | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [renewalForm, setRenewalForm] = useState(defaultRenewalForm)
-  const [paymentForm, setPaymentForm] = useState(defaultPaymentForm)
   const { showToast } = useToast()
 
   const fetchRenewals = useCallback(async () => {
@@ -126,31 +118,6 @@ export default function RenewalsPage() {
   }
 
   /**
-   * Logs a payment for a renewal.
-   */
-  const handleLogPayment = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!paymentRenewal) return
-    const res = await fetch(`/api/renewals/${paymentRenewal.id}/payments`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...paymentForm,
-        year: parseInt(paymentForm.year),
-      }),
-    })
-    const json = await res.json()
-    if (json.success) {
-      showToast('success', 'Payment logged')
-      setPaymentRenewal(null)
-      setPaymentForm(defaultPaymentForm)
-      fetchRenewals()
-    } else {
-      showToast('error', json.error || 'Failed to log payment')
-    }
-  }
-
-  /**
    * Opens the edit modal and pre-fills form with renewal data.
    */
   const openEdit = (renewal: RenewalWithPaymentStatus) => {
@@ -165,20 +132,6 @@ export default function RenewalsPage() {
       notes: renewal.notes || '',
     })
     setEditRenewal(renewal)
-  }
-
-  /**
-   * Opens the payment modal and pre-fills amount with client rate.
-   */
-  const openPayment = (renewal: RenewalWithPaymentStatus) => {
-    setPaymentForm({
-      amount_paid: toRupees(renewal.client_rate).toString(),
-      payment_date: new Date().toISOString().split('T')[0],
-      payment_method: 'UPI',
-      year: new Date().getFullYear().toString(),
-      notes: '',
-    })
-    setPaymentRenewal(renewal)
   }
 
   /**
@@ -204,7 +157,16 @@ export default function RenewalsPage() {
     return 'gray'
   }
 
-  const activeRenewals = renewals.filter(r => r.status === 'Active')
+  // Filter renewals by search query and service type
+  const filteredRenewals = renewals.filter(r => {
+    const matchesSearch = searchQuery === '' ||
+      r.domain_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      r.client_name.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesService = serviceFilter === 'all' || r.services === serviceFilter
+    return matchesSearch && matchesService
+  })
+
+  const activeRenewals = filteredRenewals.filter(r => r.status === 'Active')
   const totalRevenue = activeRenewals.reduce((sum, r) => sum + r.client_rate, 0)
   const totalCost = activeRenewals.reduce((sum, r) => sum + r.your_cost, 0)
   const totalMargin = totalRevenue - totalCost
@@ -222,27 +184,44 @@ export default function RenewalsPage() {
         </button>
       </div>
 
-      {/* Status filter */}
-      <div className="flex gap-2 mb-6">
-        {(['Active', 'all'] as const).map(filter => (
-          <button
-            key={filter}
-            onClick={() => setStatusFilter(filter)}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              statusFilter === filter
-                ? 'bg-[#1E5184] text-white'
-                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-            }`}
-          >
-            {filter === 'all' ? 'All' : 'Active'}
-          </button>
-        ))}
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+        <div className="flex gap-2">
+          {(['Active', 'all'] as const).map(filter => (
+            <button
+              key={filter}
+              onClick={() => setStatusFilter(filter)}
+              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                statusFilter === filter
+                  ? 'bg-[#1E5184] text-white'
+                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              {filter === 'all' ? 'All' : 'Active'}
+            </button>
+          ))}
+        </div>
+        <input
+          type="text"
+          placeholder="Search domain or client..."
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1E5184] focus:border-transparent outline-none sm:w-64"
+        />
+        <select
+          value={serviceFilter}
+          onChange={e => setServiceFilter(e.target.value)}
+          className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1E5184] focus:border-transparent outline-none"
+        >
+          <option value="all">All Services</option>
+          {SERVICES.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
       </div>
 
       {/* Table */}
       {loading ? (
         <div className="text-gray-500">Loading...</div>
-      ) : renewals.length === 0 ? (
+      ) : filteredRenewals.length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
           <p className="text-gray-500">No renewals found.</p>
         </div>
@@ -265,11 +244,16 @@ export default function RenewalsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {renewals.map(renewal => {
-                  const paymentBadge = getPaymentBadge(renewal)
+                {filteredRenewals.map(renewal => {
+                  const isActive = renewal.status === 'Active'
+                  const paymentBadge = isActive ? getPaymentBadge(renewal) : null
                   return (
                     <tr key={renewal.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium">{renewal.domain_name}</td>
+                      <td className="px-4 py-3 font-medium">
+                        <Link href={`/renewals/${renewal.id}`} className="text-[#1E5184] hover:underline">
+                          {renewal.domain_name}
+                        </Link>
+                      </td>
                       <td className="px-4 py-3 text-gray-600">{renewal.client_name}</td>
                       <td className="px-4 py-3 text-gray-600">{renewal.services}</td>
                       <td className="px-4 py-3 font-medium">{formatCurrency(renewal.client_rate)}</td>
@@ -282,14 +266,15 @@ export default function RenewalsPage() {
                         <Badge variant={getStatusVariant(renewal.status)}>{renewal.status}</Badge>
                       </td>
                       <td className="px-4 py-3">
-                        <Badge variant={paymentBadge.variant}>{paymentBadge.label}</Badge>
+                        {paymentBadge ? (
+                          <Badge variant={paymentBadge.variant}>{paymentBadge.label}</Badge>
+                        ) : (
+                          <span className="text-gray-400 text-xs">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
                           <button onClick={() => openEdit(renewal)} className="text-[#1E5184] hover:underline text-sm">Edit</button>
-                          {renewal.status === 'Active' && (
-                            <button onClick={() => openPayment(renewal)} className="text-green-600 hover:underline text-sm">Pay</button>
-                          )}
                           <button onClick={() => setDeleteId(renewal.id)} className="text-red-500 hover:underline text-sm">Delete</button>
                         </div>
                       </td>
@@ -412,40 +397,6 @@ export default function RenewalsPage() {
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={() => setEditRenewal(null)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
             <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-[#1E5184] rounded-lg hover:bg-[#174068]">Update Renewal</button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Log Payment Modal */}
-      <Modal isOpen={!!paymentRenewal} onClose={() => setPaymentRenewal(null)} title={`Log Payment — ${paymentRenewal?.domain_name || ''}`}>
-        <form onSubmit={handleLogPayment} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Amount (Rs.) *</label>
-              <input type="number" required min="0" value={paymentForm.amount_paid} onChange={e => setPaymentForm(prev => ({ ...prev, amount_paid: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1E5184] focus:border-transparent outline-none" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Payment Date *</label>
-              <input type="date" required value={paymentForm.payment_date} onChange={e => setPaymentForm(prev => ({ ...prev, payment_date: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1E5184] focus:border-transparent outline-none" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
-              <select value={paymentForm.payment_method} onChange={e => setPaymentForm(prev => ({ ...prev, payment_method: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1E5184] focus:border-transparent outline-none">
-                {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Year *</label>
-              <input type="number" required value={paymentForm.year} onChange={e => setPaymentForm(prev => ({ ...prev, year: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1E5184] focus:border-transparent outline-none" />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-            <input type="text" value={paymentForm.notes} onChange={e => setPaymentForm(prev => ({ ...prev, notes: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1E5184] focus:border-transparent outline-none" />
-          </div>
-          <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={() => setPaymentRenewal(null)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
-            <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-[#1E5184] rounded-lg hover:bg-[#174068]">Log Payment</button>
           </div>
         </form>
       </Modal>
