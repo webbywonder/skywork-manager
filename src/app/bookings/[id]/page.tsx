@@ -7,9 +7,10 @@ import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import PaymentForm from '@/components/forms/PaymentForm'
+import ExtraForm from '@/components/forms/ExtraForm'
 import { useToast } from '@/components/ui/Toast'
-import { formatCurrency, formatDate } from '@/lib/utils'
-import type { Payment } from '@/types'
+import { formatCurrency, formatDate, computeRecurringTotalDue } from '@/lib/utils'
+import type { Payment, BookingExtra } from '@/types'
 
 interface BookingDetail {
   id: number
@@ -33,6 +34,7 @@ interface BookingDetail {
   status: string
   notes: string | null
   payments: Payment[]
+  extras: BookingExtra[]
 }
 
 /**
@@ -48,6 +50,8 @@ export default function BookingDetailPage() {
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [deletePayment, setDeletePayment] = useState<Payment | null>(null)
   const [showDeleteBooking, setShowDeleteBooking] = useState(false)
+  const [showExtraModal, setShowExtraModal] = useState(false)
+  const [deleteExtra, setDeleteExtra] = useState<BookingExtra | null>(null)
 
   const fetchBooking = useCallback(async () => {
     try {
@@ -122,6 +126,62 @@ export default function BookingDetailPage() {
     }
   }
 
+  const handleAddExtra = async (data: { description: string; amount: string; date: string }) => {
+    try {
+      const res = await fetch(`/api/bookings/${params.id}/extras`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      const json = await res.json()
+      if (json.success) {
+        showToast('success', 'Extra added')
+        setShowExtraModal(false)
+        fetchBooking()
+      } else {
+        showToast('error', json.error || 'Failed to add extra')
+      }
+    } catch {
+      showToast('error', 'Network error: Failed to add extra')
+    }
+  }
+
+  const handleToggleExtraPaid = async (extra: BookingExtra) => {
+    try {
+      const res = await fetch(`/api/bookings/${params.id}/extras/${extra.id}`, {
+        method: 'PUT',
+      })
+      const json = await res.json()
+      if (json.success) {
+        showToast('success', extra.is_paid ? 'Marked as unpaid' : 'Marked as paid')
+        fetchBooking()
+      } else {
+        showToast('error', json.error || 'Failed to update extra')
+      }
+    } catch {
+      showToast('error', 'Network error: Failed to update extra')
+    }
+  }
+
+  const handleDeleteExtra = async () => {
+    if (!deleteExtra) return
+    try {
+      const res = await fetch(`/api/bookings/${params.id}/extras/${deleteExtra.id}`, {
+        method: 'DELETE',
+      })
+      const json = await res.json()
+      if (json.success) {
+        showToast('success', 'Extra deleted')
+        setDeleteExtra(null)
+        fetchBooking()
+      } else {
+        showToast('error', json.error || 'Failed to delete extra')
+      }
+    } catch {
+      showToast('error', 'Network error: Failed to delete extra')
+    }
+  }
+
   if (loading) return <div className="text-gray-500">Loading...</div>
   if (!booking) return <div className="text-gray-500">Booking not found</div>
 
@@ -134,11 +194,7 @@ export default function BookingDetailPage() {
   // For one-off bookings, total due = single payment
   let totalDue = monthlyDue
   if (booking.type === 'recurring') {
-    const start = new Date(booking.start_date)
-    const now = new Date()
-    const monthsElapsed = (now.getFullYear() - start.getFullYear()) * 12
-      + (now.getMonth() - start.getMonth()) + 1
-    totalDue = monthlyDue * Math.max(1, monthsElapsed)
+    totalDue = computeRecurringTotalDue(monthlyDue, booking.start_date)
   }
 
   const totalPaid = booking.payments.reduce((sum, p) => sum + p.amount_paid, 0)
@@ -325,6 +381,73 @@ export default function BookingDetailPage() {
         </div>
       )}
 
+      {/* Extras */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-6">
+        <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Extras</h2>
+            {booking.extras.filter(e => !e.is_paid).length > 0 && (
+              <p className="text-sm text-red-600">
+                Unpaid: {formatCurrency(booking.extras.filter(e => !e.is_paid).reduce((sum, e) => sum + e.amount, 0))}
+              </p>
+            )}
+          </div>
+          <button
+            onClick={() => setShowExtraModal(true)}
+            className="px-3 py-1.5 text-sm font-medium text-white bg-[#1E5184] rounded-lg hover:bg-[#174068]"
+          >
+            + Add Extra
+          </button>
+        </div>
+        {booking.extras.length === 0 ? (
+          <div className="p-8 text-center text-gray-500">No extras recorded yet.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Description</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Amount</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Date</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {booking.extras.map(extra => (
+                  <tr key={extra.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3">{extra.description}</td>
+                    <td className="px-4 py-3 font-medium">{formatCurrency(extra.amount)}</td>
+                    <td className="px-4 py-3 text-gray-600">{formatDate(extra.date)}</td>
+                    <td className="px-4 py-3">
+                      {extra.is_paid ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Paid</span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">Unpaid</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 flex gap-2">
+                      <button
+                        onClick={() => handleToggleExtraPaid(extra)}
+                        className="text-[#1E5184] hover:underline text-sm"
+                      >
+                        {extra.is_paid ? 'Mark Unpaid' : 'Mark Paid'}
+                      </button>
+                      <button
+                        onClick={() => setDeleteExtra(extra)}
+                        className="text-red-500 hover:underline text-sm"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {/* Log Payment Modal */}
       <Modal isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} title="Log Payment">
         <PaymentForm
@@ -357,6 +480,25 @@ export default function BookingDetailPage() {
         variant="danger"
         onConfirm={handleDeleteBooking}
         onCancel={() => setShowDeleteBooking(false)}
+      />
+      {/* Add Extra Modal */}
+      <Modal isOpen={showExtraModal} onClose={() => setShowExtraModal(false)} title="Add Extra" size="sm">
+        <ExtraForm
+          bookingId={booking.id}
+          onSubmit={handleAddExtra}
+          onCancel={() => setShowExtraModal(false)}
+        />
+      </Modal>
+
+      {/* Delete Extra Confirmation */}
+      <ConfirmDialog
+        isOpen={!!deleteExtra}
+        title="Delete Extra"
+        message={`Are you sure you want to delete "${deleteExtra?.description}" (${deleteExtra ? formatCurrency(deleteExtra.amount) : ''})? This action cannot be undone.`}
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={handleDeleteExtra}
+        onCancel={() => setDeleteExtra(null)}
       />
     </div>
   )
