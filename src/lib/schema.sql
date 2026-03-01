@@ -175,3 +175,17 @@ BEGIN UPDATE renewals SET updated_at = datetime('now') WHERE id = NEW.id; END;
 
 CREATE TRIGGER IF NOT EXISTS update_renewal_payments_timestamp AFTER UPDATE ON renewal_payments
 BEGIN UPDATE renewal_payments SET updated_at = datetime('now') WHERE id = NEW.id; END;
+
+CREATE TABLE IF NOT EXISTS booking_extras (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  booking_id INTEGER NOT NULL REFERENCES bookings(id),
+  description TEXT NOT NULL,
+  amount INTEGER NOT NULL,
+  date TEXT NOT NULL,
+  is_paid INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TRIGGER IF NOT EXISTS update_booking_extras_timestamp AFTER UPDATE ON booking_extras
+BEGIN UPDATE booking_extras SET updated_at = datetime('now') WHERE id = NEW.id; END;

@@ -168,3 +168,14 @@ export interface RenewalPayment {
   created_at: string
   updated_at: string
 }
+
+export interface BookingExtra {
+  id: number
+  booking_id: number
+  description: string
+  amount: number
+  date: string
+  is_paid: number
+  created_at: string
+  updated_at: string
+}
