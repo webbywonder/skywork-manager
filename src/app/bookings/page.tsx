@@ -9,11 +9,16 @@ import { useToast } from '@/components/ui/Toast'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingWithClient } from '@/types'
 
+interface BookingListItem extends BookingWithClient {
+  total_due: number
+  total_paid: number
+}
+
 /**
  * Bookings list page with type/status filters and new booking modal.
  */
 export default function BookingsPage() {
-  const [bookings, setBookings] = useState<BookingWithClient[]>([])
+  const [bookings, setBookings] = useState<BookingListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
@@ -128,6 +133,9 @@ export default function BookingsPage() {
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Package</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Rate</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Start</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Due</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Paid</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Balance</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
                 </tr>
               </thead>
@@ -153,6 +161,15 @@ export default function BookingsPage() {
                     <td className="px-4 py-3 text-gray-600">{booking.package}</td>
                     <td className="px-4 py-3 text-gray-600">{formatCurrency(booking.rate)}</td>
                     <td className="px-4 py-3 text-gray-600">{formatDate(booking.start_date)}</td>
+                    <td className="px-4 py-3 text-gray-600">{formatCurrency(booking.total_due)}</td>
+                    <td className="px-4 py-3 text-green-600 font-medium">{formatCurrency(booking.total_paid)}</td>
+                    <td className="px-4 py-3">
+                      {(() => {
+                        const balance = booking.total_due - booking.total_paid
+                        if (balance <= 0) return <span className="text-green-600 font-medium">{balance < 0 ? `${formatCurrency(Math.abs(balance))} credit` : 'Clear'}</span>
+                        return <span className="text-red-600 font-medium">{formatCurrency(balance)}</span>
+                      })()}
+                    </td>
                     <td className="px-4 py-3">
                       <Badge variant={statusVariant(booking.status)}>{booking.status}</Badge>
                     </td>

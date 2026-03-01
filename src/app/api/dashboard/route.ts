@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
+import { computeRecurringTotalDue } from '@/lib/utils'
 
 interface SummaryRow {
   total: number
@@ -61,10 +62,7 @@ export async function GET() {
 
       let totalDue = monthlyDue
       if (b.type === 'recurring') {
-        const start = new Date(b.start_date)
-        const monthsElapsed = (now.getFullYear() - start.getFullYear()) * 12
-          + (now.getMonth() - start.getMonth()) + 1
-        totalDue = monthlyDue * Math.max(1, monthsElapsed)
+        totalDue = computeRecurringTotalDue(monthlyDue, b.start_date)
       }
 
       const paidRow = db.prepare(

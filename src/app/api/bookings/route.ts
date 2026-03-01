@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
-import { generateBookingId, toPaise } from '@/lib/utils'
+import { generateBookingId, toPaise, computeRecurringTotalDue } from '@/lib/utils'
 
 /**
  * GET /api/bookings - List bookings with optional filters.
@@ -43,6 +43,15 @@ export async function GET(request: NextRequest) {
       `SELECT COUNT(*) as total FROM bookings b LEFT JOIN clients c ON b.client_id = c.id ${where}`
     ).get(...params) as { total: number }
 
+    interface BookingRow {
+      id: number
+      type: string
+      rate: number
+      seats: number
+      gst_applicable: number
+      start_date: string
+    }
+
     const bookings = db.prepare(`
       SELECT b.*, c.name as client_name, c.client_id as client_client_id
       FROM bookings b
@@ -50,11 +59,28 @@ export async function GET(request: NextRequest) {
       ${where}
       ORDER BY b.created_at DESC
       LIMIT ? OFFSET ?
-    `).all(...params, limit, offset)
+    `).all(...params, limit, offset) as (BookingRow & Record<string, unknown>)[]
+
+    // Compute total_due and total_paid for each booking
+    const bookingsWithDues = bookings.map(b => {
+      const baseMonthly = b.rate * b.seats
+      const gstMonthly = b.gst_applicable ? Math.round(baseMonthly * 18 / 100) : 0
+      const monthlyDue = baseMonthly + gstMonthly
+
+      const totalDue = b.type === 'recurring'
+        ? computeRecurringTotalDue(monthlyDue, b.start_date)
+        : monthlyDue
+
+      const paidRow = db.prepare(
+        'SELECT COALESCE(SUM(amount_paid), 0) as total FROM payments WHERE booking_id = ?'
+      ).get(b.id) as { total: number }
+
+      return { ...b, total_due: totalDue, total_paid: paidRow.total }
+    })
 
     return NextResponse.json({
       success: true,
-      data: bookings,
+      data: bookingsWithDues,
       meta: { total: countRow.total, page, limit },
     })
   } catch (error) {

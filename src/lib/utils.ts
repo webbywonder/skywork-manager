@@ -88,3 +88,33 @@ export function toPaise(rupees: number): number {
 export function toRupees(paise: number): number {
   return paise / 100
 }
+
+/**
+ * Computes total due for a recurring booking from start_date to today.
+ * First partial month is prorated using rate/30 × days remaining.
+ * Subsequent calendar months are charged at full rate.
+ * If start_date is the 1st, all months are full-rate (no proration needed).
+ */
+export function computeRecurringTotalDue(monthlyDue: number, startDate: string): number {
+  const start = new Date(startDate)
+  const now = new Date()
+
+  const startDay = start.getDate()
+
+  if (startDay === 1) {
+    const monthsElapsed = (now.getFullYear() - start.getFullYear()) * 12
+      + (now.getMonth() - start.getMonth()) + 1
+    return monthlyDue * Math.max(1, monthsElapsed)
+  }
+
+  // Prorate the first partial month: rate / 30 × days remaining in start month
+  const daysInStartMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate()
+  const daysRemaining = daysInStartMonth - startDay + 1
+  const proratedFirst = Math.round(monthlyDue / 30 * daysRemaining)
+
+  // Full calendar months after the start month up to and including current month
+  const fullMonths = (now.getFullYear() - start.getFullYear()) * 12
+    + (now.getMonth() - start.getMonth())
+
+  return proratedFirst + monthlyDue * Math.max(0, fullMonths)
+}
