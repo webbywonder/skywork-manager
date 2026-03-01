@@ -1,6 +1,11 @@
 # SkyWork Manager
 
-A local-only workspace management system for SkyWork Borivali co-working space. Single user, no authentication — runs on localhost.
+A personal business assistant for managing day-to-day operations across two verticals:
+
+1. **SkyWork Borivali** — Co-working space management (clients, bookings, payments, expenses)
+2. **WebbyWonder** — Web development & consulting business (domain/hosting renewals, future modules)
+
+Single user, no authentication — local-only system running on localhost. The goal is to progressively replace manual tracking with purpose-built modules that automate reminders, calculations, and record-keeping.
 
 ## Tech Stack
 
@@ -17,7 +22,14 @@ npm run dev
 
 Open [http://localhost:8000](http://localhost:8000). The database is auto-created on first run at `data/skywork.db`.
 
-## Features
+To seed initial renewal data:
+```bash
+npx tsx src/scripts/seed-renewals.ts
+```
+
+## Modules
+
+### SkyWork (Co-working Space)
 
 - **Dashboard** — Revenue, outstanding dues, occupancy, expenses, profit/loss, upcoming renewals at a glance
 - **Enquiries** — Lead tracking with follow-up scheduling and status pipeline (New → Contacted → Follow-up → Converted/Lost)
@@ -29,10 +41,18 @@ Open [http://localhost:8000](http://localhost:8000). The database is auto-create
   - Due/Paid/Balance visible on both list and detail pages
 - **Payments** — Ledger-based payment tracking per booking with receipt generation
 - **Deposits** — Security deposit management with refund tracking
-- **Renewals** — Domain, hosting, and service renewal tracking with payment logging per year
 - **Expenses** — One-off expense logging and recurring expense management
 - **Receipts** — Printable receipts matching SkyWork branding (blue gradient header, terms & conditions)
 - **Settings** — Business details stored as key-value pairs
+
+### WebbyWonder (Web Development Business)
+
+- **Renewals** — Track domain, hosting, email, SMS, and WhatsApp service renewals for clients
+  - Per-client cost vs rate for margin visibility
+  - Yearly payment ledger with auto-advance of renewal dates
+  - Dashboard alerts for upcoming (30 days) and overdue renewals
+  - Statuses: Active / Discontinued / Managed by Other
+  - Search and filter by service type
 
 ## Business Rules
 
@@ -41,6 +61,7 @@ Open [http://localhost:8000](http://localhost:8000). The database is auto-create
 - **Workspace capacity:** 13 seats (9 open + 4 cabin)
 - **Amounts stored in paise:** Rs. 5,000 = 500000 in the database
 - **Dates as ISO strings:** YYYY-MM-DD format
+- **Brand colour:** `#1E5184`
 
 ## Scripts
 
