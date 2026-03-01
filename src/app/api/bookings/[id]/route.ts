@@ -30,7 +30,11 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       `SELECT * FROM payments WHERE booking_id = ? ORDER BY created_at DESC`
     ).all(bookingId)
 
-    return NextResponse.json({ success: true, data: { ...booking, payments } })
+    const extras = db.prepare(
+      'SELECT * FROM booking_extras WHERE booking_id = ? ORDER BY date DESC, created_at DESC'
+    ).all(bookingId)
+
+    return NextResponse.json({ success: true, data: { ...booking, payments, extras } })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to fetch booking'
     return NextResponse.json({ success: false, error: message }, { status: 500 })
@@ -75,7 +79,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 }
 
 /**
- * DELETE /api/bookings/[id] - Delete a booking and all associated payments.
+ * DELETE /api/bookings/[id] - Delete a booking and all associated extras and payments.
  */
 export async function DELETE(_request: NextRequest, context: RouteContext) {
   try {
@@ -112,6 +116,7 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
         }
       }
 
+      db.prepare('DELETE FROM booking_extras WHERE booking_id = ?').run(bookingId)
       db.prepare('DELETE FROM payments WHERE booking_id = ?').run(bookingId)
       db.prepare('DELETE FROM bookings WHERE id = ?').run(bookingId)
     })
