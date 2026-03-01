@@ -140,3 +140,31 @@ export interface DepositWithClient extends Deposit {
   client_name: string
   client_client_id: string
 }
+
+export type RenewalStatus = 'Active' | 'Discontinued' | 'Managed by Other'
+
+export interface Renewal {
+  id: number
+  domain_name: string
+  client_name: string
+  services: string
+  client_rate: number
+  your_cost: number
+  renewal_date: string
+  status: RenewalStatus
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface RenewalPayment {
+  id: number
+  renewal_id: number
+  amount_paid: number
+  payment_date: string
+  payment_method: PaymentMethod | null
+  year: number
+  notes: string | null
+  created_at: string
+  updated_at: string
+}

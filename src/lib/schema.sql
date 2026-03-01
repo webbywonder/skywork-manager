@@ -143,3 +143,35 @@ BEGIN UPDATE recurring_expenses SET updated_at = datetime('now') WHERE id = NEW.
 
 CREATE TRIGGER IF NOT EXISTS update_expenses_timestamp AFTER UPDATE ON expenses
 BEGIN UPDATE expenses SET updated_at = datetime('now') WHERE id = NEW.id; END;
+
+CREATE TABLE IF NOT EXISTS renewals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  domain_name TEXT NOT NULL,
+  client_name TEXT NOT NULL,
+  services TEXT NOT NULL DEFAULT 'Domain',
+  client_rate INTEGER NOT NULL,
+  your_cost INTEGER NOT NULL DEFAULT 0,
+  renewal_date TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'Active' CHECK(status IN ('Active', 'Discontinued', 'Managed by Other')),
+  notes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS renewal_payments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  renewal_id INTEGER NOT NULL REFERENCES renewals(id),
+  amount_paid INTEGER NOT NULL,
+  payment_date TEXT NOT NULL,
+  payment_method TEXT CHECK(payment_method IN ('UPI', 'Cash', 'Bank Transfer', 'GPay')),
+  year INTEGER NOT NULL,
+  notes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TRIGGER IF NOT EXISTS update_renewals_timestamp AFTER UPDATE ON renewals
+BEGIN UPDATE renewals SET updated_at = datetime('now') WHERE id = NEW.id; END;
+
+CREATE TRIGGER IF NOT EXISTS update_renewal_payments_timestamp AFTER UPDATE ON renewal_payments
+BEGIN UPDATE renewal_payments SET updated_at = datetime('now') WHERE id = NEW.id; END;
