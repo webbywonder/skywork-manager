@@ -189,3 +189,13 @@ CREATE TABLE IF NOT EXISTS booking_extras (
 
 CREATE TRIGGER IF NOT EXISTS update_booking_extras_timestamp AFTER UPDATE ON booking_extras
 BEGIN UPDATE booking_extras SET updated_at = datetime('now') WHERE id = NEW.id; END;
+
+CREATE TABLE IF NOT EXISTS booking_revisions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  booking_id INTEGER NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+  field_name TEXT NOT NULL,
+  old_value TEXT,
+  new_value TEXT,
+  changed_at TEXT DEFAULT (datetime('now')),
+  created_at TEXT DEFAULT (datetime('now'))
+);

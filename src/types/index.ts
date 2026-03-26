@@ -129,6 +129,7 @@ export interface Expense {
 export interface BookingWithClient extends Booking {
   client_name: string | null
   client_client_id: string | null
+  client_phone: string | null
 }
 
 export interface PaymentWithBooking extends Payment {

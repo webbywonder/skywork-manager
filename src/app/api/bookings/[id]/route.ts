@@ -34,7 +34,11 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       'SELECT * FROM booking_extras WHERE booking_id = ? ORDER BY date DESC, created_at DESC'
     ).all(bookingId)
 
-    return NextResponse.json({ success: true, data: { ...booking, payments, extras } })
+    const revisions = db.prepare(
+      'SELECT * FROM booking_revisions WHERE booking_id = ? ORDER BY changed_at DESC'
+    ).all(bookingId)
+
+    return NextResponse.json({ success: true, data: { ...booking, payments, extras, revisions } })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to fetch booking'
     return NextResponse.json({ success: false, error: message }, { status: 500 })
@@ -42,7 +46,9 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 }
 
 /**
- * PUT /api/bookings/[id] - Update booking status.
+ * PUT /api/bookings/[id] - Update booking details.
+ * Accepts any combination of: status, notes, package, type, seats, rate,
+ * start_date, end_date, days, gst_applicable.
  */
 export async function PUT(request: NextRequest, context: RouteContext) {
   try {
@@ -56,14 +62,59 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ success: false, error: 'Booking not found' }, { status: 404 })
     }
 
-    const { status, notes } = body
+    const fields: string[] = []
+    const values: (string | number | null)[] = []
 
-    if (status) {
-      db.prepare('UPDATE bookings SET status = ? WHERE id = ?').run(status, bookingId)
+    const allowedFields: Record<string, 'string' | 'number' | 'nullable_string'> = {
+      status: 'string',
+      notes: 'nullable_string',
+      package: 'string',
+      type: 'string',
+      seats: 'number',
+      rate: 'number',
+      start_date: 'string',
+      end_date: 'nullable_string',
+      days: 'number',
+      gst_applicable: 'number',
     }
-    if (notes !== undefined) {
-      db.prepare('UPDATE bookings SET notes = ? WHERE id = ?').run(notes, bookingId)
+
+    for (const [field, fieldType] of Object.entries(allowedFields)) {
+      if (body[field] !== undefined) {
+        fields.push(`${field} = ?`)
+        if (fieldType === 'number') {
+          values.push(Number(body[field]))
+        } else if (fieldType === 'nullable_string') {
+          values.push(body[field] || null)
+        } else {
+          values.push(body[field])
+        }
+      }
     }
+
+    if (fields.length === 0) {
+      return NextResponse.json({ success: false, error: 'No fields to update' }, { status: 400 })
+    }
+
+    // Log revisions for tracked fields before updating
+    const trackedFields = ['rate', 'seats', 'gst_applicable', 'package'] as const
+    const existingRecord = existing as Record<string, unknown>
+    const insertRevision = db.prepare(
+      'INSERT INTO booking_revisions (booking_id, field_name, old_value, new_value) VALUES (?, ?, ?, ?)'
+    )
+    for (const field of trackedFields) {
+      if (body[field] !== undefined) {
+        const oldVal = String(existingRecord[field] ?? '')
+        const newVal = String(field === 'rate' || field === 'seats' || field === 'gst_applicable'
+          ? Number(body[field])
+          : body[field])
+        if (oldVal !== newVal) {
+          insertRevision.run(bookingId, field, oldVal, newVal)
+        }
+      }
+    }
+
+    values.push(bookingId)
+    db.prepare(`UPDATE bookings SET ${fields.join(', ')} WHERE id = ?`).run(...values)
 
     const updated = db.prepare(`
       SELECT b.*, c.name as client_name, c.client_id as client_client_id

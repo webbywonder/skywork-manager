@@ -8,6 +8,7 @@ import Modal from '@/components/ui/Modal'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import PaymentForm from '@/components/forms/PaymentForm'
 import ExtraForm from '@/components/forms/ExtraForm'
+import EditBookingForm from '@/components/forms/EditBookingForm'
 import { useToast } from '@/components/ui/Toast'
 import { formatCurrency, formatDate, computeRecurringTotalDue } from '@/lib/utils'
 import type { Payment, BookingExtra } from '@/types'
@@ -35,6 +36,13 @@ interface BookingDetail {
   notes: string | null
   payments: Payment[]
   extras: BookingExtra[]
+  revisions: Array<{
+    id: number
+    field_name: string
+    old_value: string | null
+    new_value: string | null
+    changed_at: string
+  }>
 }
 
 /**
@@ -53,6 +61,7 @@ export default function BookingDetailPage() {
   const [showExtraModal, setShowExtraModal] = useState(false)
   const [deleteExtra, setDeleteExtra] = useState<BookingExtra | null>(null)
   const [showStatusConfirm, setShowStatusConfirm] = useState<'Completed' | 'Cancelled' | null>(null)
+  const [showEditModal, setShowEditModal] = useState(false)
 
   const fetchBooking = useCallback(async () => {
     try {
@@ -207,8 +216,38 @@ export default function BookingDetailPage() {
     }
   }
 
+  const handleEditBooking = async (data: Record<string, string | number | boolean | null>) => {
+    try {
+      const res = await fetch(`/api/bookings/${params.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      const json = await res.json()
+      if (json.success) {
+        showToast('success', 'Booking updated')
+        setShowEditModal(false)
+        fetchBooking()
+      } else {
+        showToast('error', json.error || 'Failed to update booking')
+      }
+    } catch {
+      showToast('error', 'Network error: Failed to update booking')
+    }
+  }
+
   if (loading) return <div className="text-gray-500">Loading...</div>
   if (!booking) return <div className="text-gray-500">Booking not found</div>
+
+  // Compute next renewal date for recurring bookings (always 1st of next month)
+  let renewsOn: string | null = null
+  if (booking.type === 'recurring' && booking.status === 'Active') {
+    const today = new Date()
+    let year = today.getFullYear()
+    let month = today.getMonth() + 1
+    if (month > 11) { month = 0; year += 1 }
+    renewsOn = new Date(year, month, 1).toISOString().split('T')[0]
+  }
 
   // Monthly due = rate × seats + GST
   const baseMonthly = booking.rate * booking.seats
@@ -251,6 +290,12 @@ export default function BookingDetailPage() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => setShowEditModal(true)}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
+            Edit
+          </button>
           {booking.status === 'Active' && (
             <>
               <button
@@ -297,20 +342,29 @@ export default function BookingDetailPage() {
               <dt className="text-gray-500">Package</dt>
               <dd className="font-medium">{booking.package}</dd>
             </div>
+            <div className="border-t border-gray-100 my-1.5" />
+            <div className="flex justify-between">
+              <dt className="text-gray-500">Rate (per seat)</dt>
+              <dd className="font-medium">{formatCurrency(booking.rate)}</dd>
+            </div>
             <div className="flex justify-between">
               <dt className="text-gray-500">Seats</dt>
               <dd className="font-medium">{booking.seats}</dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-gray-500">Rate</dt>
-              <dd className="font-medium">{formatCurrency(booking.rate)}</dd>
+              <dt className="text-gray-500">Base</dt>
+              <dd className="font-medium">{formatCurrency(baseMonthly)}</dd>
             </div>
             {booking.gst_applicable === 1 && (
               <div className="flex justify-between">
-                <dt className="text-gray-500">GST</dt>
-                <dd className="font-medium">18%</dd>
+                <dt className="text-gray-500">GST (18%)</dt>
+                <dd className="font-medium">{formatCurrency(gstMonthly)}</dd>
               </div>
             )}
+            <div className="flex justify-between border-t border-gray-100 pt-1.5">
+              <dt className="text-gray-500 font-medium">Monthly Due</dt>
+              <dd className="font-bold text-[#1E5184]">{formatCurrency(monthlyDue)}</dd>
+            </div>
           </dl>
         </div>
 
@@ -331,6 +385,12 @@ export default function BookingDetailPage() {
               <div className="flex justify-between">
                 <dt className="text-gray-500">Days</dt>
                 <dd className="font-medium">{booking.days}</dd>
+              </div>
+            )}
+            {renewsOn && (
+              <div className="flex justify-between">
+                <dt className="text-gray-500">Renews On</dt>
+                <dd className="font-medium text-[#1E5184]">{formatDate(renewsOn)}</dd>
               </div>
             )}
           </dl>
@@ -491,6 +551,54 @@ export default function BookingDetailPage() {
         )}
       </div>
 
+      {/* Revision History */}
+      {booking.revisions && booking.revisions.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-6">
+          <div className="px-4 py-3 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900">Revision History</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Date</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Field</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">From</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">To</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {booking.revisions.map(rev => {
+                  const isMonetary = rev.field_name === 'rate'
+                  const formatRevValue = (val: string | null) => {
+                    if (val === null || val === '') return '-'
+                    if (isMonetary) return formatCurrency(Number(val))
+                    if (rev.field_name === 'gst_applicable') return val === '1' ? 'Yes' : 'No'
+                    return val
+                  }
+                  return (
+                    <tr key={rev.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-gray-600">
+                        {formatDate(rev.changed_at)}
+                      </td>
+                      <td className="px-4 py-3 capitalize">
+                        {rev.field_name.replace(/_/g, ' ')}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {formatRevValue(rev.old_value)}
+                      </td>
+                      <td className="px-4 py-3 font-medium">
+                        {formatRevValue(rev.new_value)}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Log Payment Modal */}
       <Modal isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} title="Log Payment">
         <PaymentForm
@@ -543,6 +651,15 @@ export default function BookingDetailPage() {
         onConfirm={handleDeleteExtra}
         onCancel={() => setDeleteExtra(null)}
       />
+
+      {/* Edit Booking Modal */}
+      <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit Booking" size="lg">
+        <EditBookingForm
+          booking={booking}
+          onSubmit={handleEditBooking}
+          onCancel={() => setShowEditModal(false)}
+        />
+      </Modal>
 
       {/* Status Change Confirmation */}
       <ConfirmDialog
