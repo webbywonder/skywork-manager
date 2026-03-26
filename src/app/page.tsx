@@ -10,6 +10,7 @@ interface DashboardData {
   revenue: { thisMonth: number; lastMonth: number }
   outstanding: number
   overduePayments: Array<{
+    id: number
     booking_id: string
     client_name: string | null
     client_display_id: string | null
@@ -21,6 +22,7 @@ interface DashboardData {
   activeClients: number
   pendingFollowUps: number
   profitLoss: number
+  totals: { revenue: number; expenses: number; profit: number }
   renewals: {
     upcoming: Array<{
       id: number
@@ -37,6 +39,57 @@ interface DashboardData {
       renewal_date: string
     }>
   }
+  monthlyRevenue: Array<{ month: string; total: number }>
+}
+
+/**
+ * Build a full list of the last 12 months (YYYY-MM), filling gaps with zero.
+ */
+function buildMonthlyData(raw: Array<{ month: string; total: number }>): Array<{ month: string; label: string; total: number }> {
+  const months: Array<{ month: string; label: string; total: number }> = []
+  const lookup = new Map(raw.map(r => [r.month, r.total]))
+  const now = new Date()
+
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    const label = d.toLocaleString('en-IN', { month: 'short' })
+    months.push({ month: key, label, total: lookup.get(key) || 0 })
+  }
+
+  return months
+}
+
+/**
+ * Simple CSS bar chart for monthly revenue.
+ */
+function RevenueChart({ data }: { data: Array<{ month: string; total: number }> }) {
+  const months = buildMonthlyData(data)
+  const maxRevenue = Math.max(...months.map(m => m.total), 1)
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+      <h2 className="text-lg font-semibold text-gray-900 mb-4">Monthly Revenue (Last 12 Months)</h2>
+      <div className="flex items-end gap-2 h-48">
+        {months.map(m => {
+          const heightPercent = (m.total / maxRevenue) * 100
+          return (
+            <div key={m.month} className="flex-1 flex flex-col items-center gap-1 h-full justify-end group">
+              <span className="text-xs text-gray-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                {formatCurrency(m.total)}
+              </span>
+              <div
+                className="w-full rounded-t transition-all bg-[#1E5184] group-hover:bg-[#174068] min-w-[12px]"
+                style={{ height: m.total > 0 ? `${Math.max(heightPercent, 2)}%` : '0%' }}
+                title={`${m.label}: ${formatCurrency(m.total)}`}
+              />
+              <span className="text-xs text-gray-500 mt-1">{m.label}</span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 /**
@@ -118,6 +171,7 @@ export default function DashboardPage() {
             </p>
           )}
           <p className="text-xs text-gray-400 mt-1">Last month: {formatCurrency(data.revenue.lastMonth)}</p>
+          <p className="text-xs text-gray-400">All time: {formatCurrency(data.totals.revenue)}</p>
         </div>
 
         {/* Outstanding */}
@@ -144,6 +198,7 @@ export default function DashboardPage() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Expenses (This Month)</h3>
           <p className="text-3xl font-bold text-red-500 mt-2">{formatCurrency(data.expenses)}</p>
+          <p className="text-xs text-gray-400 mt-1">All time: {formatCurrency(data.totals.expenses)}</p>
         </div>
 
         {/* P&L */}
@@ -153,6 +208,7 @@ export default function DashboardPage() {
             {data.profitLoss >= 0 ? '+' : ''}{formatCurrency(Math.abs(data.profitLoss))}
           </p>
           <p className="text-sm text-gray-500 mt-1">Revenue minus expenses</p>
+          <p className="text-xs text-gray-400">All time: {data.totals.profit >= 0 ? '+' : ''}{formatCurrency(Math.abs(data.totals.profit))}</p>
         </div>
 
         {/* Deposits */}
@@ -161,6 +217,9 @@ export default function DashboardPage() {
           <p className="text-3xl font-bold text-[#1E5184] mt-2">{formatCurrency(data.depositsHeld)}</p>
         </div>
       </div>
+
+      {/* Monthly Revenue Chart */}
+      <RevenueChart data={data.monthlyRevenue} />
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
@@ -246,7 +305,11 @@ export default function DashboardPage() {
                         <span className="block text-xs text-gray-500">{p.client_display_id}</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-gray-600">{p.booking_id}</td>
+                    <td className="px-4 py-3">
+                      <Link href={`/bookings/${p.id}`} className="text-[#1E5184] hover:underline font-medium">
+                        {p.booking_id}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3 font-medium text-red-600">
                       {formatCurrency(p.balance)}
                     </td>

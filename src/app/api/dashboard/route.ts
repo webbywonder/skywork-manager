@@ -53,7 +53,7 @@ export async function GET() {
     `).all() as BookingRow[]
 
     let outstandingTotal = 0
-    const overdueList: { booking_id: string; client_name: string | null; client_display_id: string | null; balance: number }[] = []
+    const overdueList: { id: number; booking_id: string; client_name: string | null; client_display_id: string | null; balance: number }[] = []
 
     for (const b of activeBookings) {
       const baseMonthly = b.rate * b.seats
@@ -73,6 +73,7 @@ export async function GET() {
       if (balance > 0) {
         outstandingTotal += balance
         overdueList.push({
+          id: b.id,
           booking_id: b.booking_id,
           client_name: b.client_name,
           client_display_id: b.client_display_id,
@@ -82,6 +83,16 @@ export async function GET() {
     }
 
     const overduePayments = overdueList
+
+    // All-time revenue (sum of all payments ever)
+    const revenueAllTime = db.prepare(
+      `SELECT COALESCE(SUM(amount_paid), 0) as total FROM payments`
+    ).get() as SummaryRow
+
+    // All-time expenses
+    const expensesAllTime = db.prepare(
+      `SELECT COALESCE(SUM(amount), 0) as total FROM expenses`
+    ).get() as SummaryRow
 
     // Active seats (sum of seats from active bookings)
     const occupancy = db.prepare(
@@ -134,6 +145,18 @@ export async function GET() {
       ORDER BY r.renewal_date ASC
     `).all(todayStr, currentYear) as Array<{ id: number; domain_name: string; client_name: string; client_rate: number; renewal_date: string }>
 
+    // Monthly revenue for last 12 months
+    const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1)
+    const startDateStr = twelveMonthsAgo.toISOString().split('T')[0]
+
+    const monthlyRevenue = db.prepare(`
+      SELECT strftime('%Y-%m', payment_date) as month, COALESCE(SUM(amount_paid), 0) as total
+      FROM payments
+      WHERE payment_date >= ?
+      GROUP BY strftime('%Y-%m', payment_date)
+      ORDER BY month ASC
+    `).all(startDateStr) as Array<{ month: string; total: number }>
+
     return NextResponse.json({
       success: true,
       data: {
@@ -145,17 +168,23 @@ export async function GET() {
         overduePayments,
         occupancy: {
           filled: occupancy.total,
-          total: 13,
+          total: 12,
         },
         expenses: expensesThisMonth.total,
         depositsHeld: depositsHeld.total,
         activeClients: activeClients.total,
         pendingFollowUps: pendingFollowUps.total,
         profitLoss: revenueThisMonth.total - expensesThisMonth.total,
+        totals: {
+          revenue: revenueAllTime.total,
+          expenses: expensesAllTime.total,
+          profit: revenueAllTime.total - expensesAllTime.total,
+        },
         renewals: {
           upcoming: upcomingRenewals,
           overdue: overdueRenewals,
         },
+        monthlyRevenue,
       },
     })
   } catch (error) {
