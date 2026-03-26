@@ -22,7 +22,7 @@ export default function BookingsPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
-  const [statusFilter, setStatusFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('Active')
   const [showModal, setShowModal] = useState(false)
   const { showToast } = useToast()
 
@@ -131,8 +131,10 @@ export default function BookingsPage() {
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Client</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Type</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Package</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Seats</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Rate</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Start</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Renews On</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Due</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Paid</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Balance</th>
@@ -152,6 +154,9 @@ export default function BookingsPage() {
                       {booking.client_client_id && (
                         <span className="block text-xs text-gray-500">{booking.client_client_id}</span>
                       )}
+                      {booking.client_phone && (
+                        <span className="block text-xs text-gray-500">{booking.client_phone}</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <Badge variant={booking.type === 'recurring' ? 'blue' : 'gray'}>
@@ -159,8 +164,19 @@ export default function BookingsPage() {
                       </Badge>
                     </td>
                     <td className="px-4 py-3 text-gray-600">{booking.package}</td>
+                    <td className="px-4 py-3 text-gray-600">{booking.seats}</td>
                     <td className="px-4 py-3 text-gray-600">{formatCurrency(booking.rate)}</td>
                     <td className="px-4 py-3 text-gray-600">{formatDate(booking.start_date)}</td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {(() => {
+                        if (booking.type !== 'recurring' || booking.status !== 'Active') return '—'
+                        const today = new Date()
+                        let year = today.getFullYear()
+                        let month = today.getMonth() + 1
+                        if (month > 11) { month = 0; year += 1 }
+                        return <span className="text-[#1E5184] font-medium">{formatDate(new Date(year, month, 1).toISOString().split('T')[0])}</span>
+                      })()}
+                    </td>
                     <td className="px-4 py-3 text-gray-600">{formatCurrency(booking.total_due)}</td>
                     <td className="px-4 py-3 text-green-600 font-medium">{formatCurrency(booking.total_paid)}</td>
                     <td className="px-4 py-3">

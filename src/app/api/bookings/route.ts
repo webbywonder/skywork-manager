@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
     }
 
     const bookings = db.prepare(`
-      SELECT b.*, c.name as client_name, c.client_id as client_client_id
+      SELECT b.*, c.name as client_name, c.client_id as client_client_id, c.phone as client_phone
       FROM bookings b
       LEFT JOIN clients c ON b.client_id = c.id
       ${where}
