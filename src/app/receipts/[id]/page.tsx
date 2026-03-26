@@ -67,12 +67,52 @@ export default function ReceiptPage() {
   const customerPhone = payment.client_phone || payment.walk_in_phone || ''
   const customerEmail = payment.client_email || ''
 
-  const amountRupees = payment.amount_due / 100
   const paidRupees = payment.amount_paid / 100
   const gstRate = payment.gst_applicable ? 18 : 0
-  const gstAmount = gstRate > 0 ? amountRupees * (gstRate / 100) : 0
+  // For ledger-based payments, amount_paid IS the amount (amount_due is legacy/0)
+  // Back-calculate the base amount from the paid amount when GST is applicable
+  const amountRupees = gstRate > 0 ? Math.round((paidRupees / 1.18) * 100) / 100 : paidRupees
+  const gstAmount = gstRate > 0 ? Math.round((paidRupees - amountRupees) * 100) / 100 : 0
   const totalWithGst = amountRupees + gstAmount
   const balanceDue = totalWithGst - paidRupees
+
+  // Compute billing period and next renewal date for recurring bookings
+  let renewsOn: string | null = null
+  let billingPeriodStart: string | null = payment.billing_period_start
+  let billingPeriodEnd: string | null = payment.billing_period_end
+
+  if (payment.booking_type === 'recurring') {
+    const payDate = payment.payment_date ? new Date(payment.payment_date) : new Date()
+
+    if (!billingPeriodStart) {
+      // Derive billing period from payment date and type
+      // Use string manipulation to avoid timezone issues with toISOString()
+      const payYear = payDate.getUTCFullYear()
+      const payMonth = payDate.getUTCMonth()
+
+      if (payment.payment_type === 'advance') {
+        // Advance = paying for next month
+        const startYear = payMonth === 11 ? payYear + 1 : payYear
+        const startMonth = payMonth === 11 ? 0 : payMonth + 1
+        const endDay = new Date(Date.UTC(startYear, startMonth + 1, 0)).getUTCDate()
+        billingPeriodStart = `${startYear}-${String(startMonth + 1).padStart(2, '0')}-01`
+        billingPeriodEnd = `${startYear}-${String(startMonth + 1).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`
+      } else {
+        // Current month payment
+        const endDay = new Date(Date.UTC(payYear, payMonth + 1, 0)).getUTCDate()
+        billingPeriodStart = `${payYear}-${String(payMonth + 1).padStart(2, '0')}-01`
+        billingPeriodEnd = `${payYear}-${String(payMonth + 1).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`
+      }
+    }
+
+    // Next renewal = 1st of the month after billing period
+    if (billingPeriodEnd) {
+      const [ey, em] = billingPeriodEnd.split('-').map(Number)
+      const renewYear = em === 12 ? ey + 1 : ey
+      const renewMonth = em === 12 ? 1 : em + 1
+      renewsOn = `${renewYear}-${String(renewMonth).padStart(2, '0')}-01`
+    }
+  }
 
   const formatRupees = (n: number) => {
     return `Rs. ${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -175,20 +215,27 @@ export default function ReceiptPage() {
                     {payment.package} Co-working Space ({payment.seats} seat{payment.seats > 1 ? 's' : ''})
                     <br />
                     <span className="text-gray-500 text-xs">
-                      {payment.billing_period_start && payment.billing_period_end
-                        ? `Period: ${formatDate(payment.billing_period_start)} - ${formatDate(payment.billing_period_end)}`
-                        : payment.start_date
+                      {payment.booking_type === 'recurring' && billingPeriodStart && billingPeriodEnd
+                        ? `Period: ${formatDate(billingPeriodStart)} - ${formatDate(billingPeriodEnd)}`
+                        : payment.booking_type === 'one-off' && payment.start_date
                           ? `From: ${formatDate(payment.start_date)}${payment.end_date ? ` to ${formatDate(payment.end_date)}` : ''}`
                           : ''}
                     </span>
                   </td>
-                  <td className="p-3">{payment.days ? `${payment.days} days` : '1 month'}</td>
+                  <td className="p-3">{payment.booking_type === 'recurring' ? '1 month' : `${payment.days || 1} day${(payment.days || 1) > 1 ? 's' : ''}`}</td>
                   <td className="p-3">{formatRupees(payment.booking_rate / 100)}</td>
                   <td className="p-3 text-right">{formatRupees(amountRupees)}</td>
                 </tr>
               </tbody>
             </table>
           </div>
+
+          {/* Renewal Info */}
+          {renewsOn && (
+            <div className="mb-4 text-sm text-gray-600">
+              <strong className="text-[#1E5184]">Next Renewal:</strong> {formatDate(renewsOn)}
+            </div>
+          )}
 
           {/* Payment Summary */}
           <div className="mb-8">
