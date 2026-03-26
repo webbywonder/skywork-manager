@@ -49,7 +49,7 @@ function seedDefaultSettings(database: Database.Database): void {
     contact_phone: '+91 9029208698',
     contact_email: 'gadadarshan@gmail.com',
     workspace_address: '1502, Om Siddhivinayak SRA CHS Ltd, Carter Road No. 1, Near Borivali Railway Station, Behind Kasturba Road Police Station, PBC Building Gate No. 2, Borivali East, Mumbai, Maharashtra 400066',
-    workspace_capacity: '13',
+    workspace_capacity: '12',
     open_seats: '9',
     cabin_seats: '4',
     operating_hours: '9:00 AM to 9:00 PM',

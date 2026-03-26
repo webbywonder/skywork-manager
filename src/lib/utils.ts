@@ -107,9 +107,8 @@ export function computeRecurringTotalDue(monthlyDue: number, startDate: string):
     return monthlyDue * Math.max(1, monthsElapsed)
   }
 
-  // Prorate the first partial month: rate / 30 × days remaining in start month
-  const daysInStartMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate()
-  const daysRemaining = daysInStartMonth - startDay + 1
+  // Prorate the first partial month: rate / 30 × days remaining (inclusive of start day, using standardised 30-day month)
+  const daysRemaining = 30 - startDay + 1
   const proratedFirst = Math.round(monthlyDue / 30 * daysRemaining)
 
   // Full calendar months after the start month up to and including current month
