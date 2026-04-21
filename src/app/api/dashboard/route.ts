@@ -40,12 +40,13 @@ export async function GET() {
       seats: number
       gst_applicable: number
       start_date: string
+      billing_cycle: 'calendar' | 'anniversary'
       client_name: string | null
       client_display_id: string | null
     }
 
     const activeBookings = db.prepare(`
-      SELECT b.id, b.booking_id, b.type, b.rate, b.seats, b.gst_applicable, b.start_date,
+      SELECT b.id, b.booking_id, b.type, b.rate, b.seats, b.gst_applicable, b.start_date, b.billing_cycle,
              c.name as client_name, c.client_id as client_display_id
       FROM bookings b
       LEFT JOIN clients c ON b.client_id = c.id
@@ -62,7 +63,7 @@ export async function GET() {
 
       let totalDue = monthlyDue
       if (b.type === 'recurring') {
-        totalDue = computeRecurringTotalDue(monthlyDue, b.start_date)
+        totalDue = computeRecurringTotalDue(monthlyDue, b.start_date, undefined, b.billing_cycle)
       }
 
       const paidRow = db.prepare(
@@ -168,7 +169,7 @@ export async function GET() {
         overduePayments,
         occupancy: {
           filled: occupancy.total,
-          total: 12,
+          total: 10,
         },
         expenses: expensesThisMonth.total,
         depositsHeld: depositsHeld.total,

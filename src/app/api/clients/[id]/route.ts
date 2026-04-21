@@ -74,3 +74,44 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
 }
+
+/**
+ * DELETE /api/clients/[id] - Delete a client, only if it has no bookings and no deposits.
+ * Returns 409 with a descriptive error if any dependent records exist.
+ */
+export async function DELETE(_request: NextRequest, context: RouteContext) {
+  try {
+    const db = getDb()
+    const { id } = await context.params
+    const clientId = parseInt(id, 10)
+
+    const existing = db.prepare('SELECT id FROM clients WHERE id = ?').get(clientId)
+    if (!existing) {
+      return NextResponse.json({ success: false, error: 'Client not found' }, { status: 404 })
+    }
+
+    const bookingCount = (db.prepare(
+      'SELECT COUNT(*) as cnt FROM bookings WHERE client_id = ?'
+    ).get(clientId) as { cnt: number }).cnt
+
+    const depositCount = (db.prepare(
+      'SELECT COUNT(*) as cnt FROM deposits WHERE client_id = ?'
+    ).get(clientId) as { cnt: number }).cnt
+
+    if (bookingCount > 0 || depositCount > 0) {
+      const parts: string[] = []
+      if (bookingCount > 0) parts.push(`${bookingCount} booking${bookingCount === 1 ? '' : 's'}`)
+      if (depositCount > 0) parts.push(`${depositCount} deposit${depositCount === 1 ? '' : 's'}`)
+      return NextResponse.json(
+        { success: false, error: `Cannot delete: client has ${parts.join(' and ')}. Remove them first.` },
+        { status: 409 }
+      )
+    }
+
+    db.prepare('DELETE FROM clients WHERE id = ?').run(clientId)
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to delete client'
+    return NextResponse.json({ success: false, error: message }, { status: 500 })
+  }
+}

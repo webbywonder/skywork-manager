@@ -172,9 +172,19 @@ export default function BookingsPage() {
                         if (booking.type !== 'recurring' || booking.status !== 'Active') return '—'
                         const today = new Date()
                         let year = today.getFullYear()
-                        let month = today.getMonth() + 1
+                        let month: number
+                        let day: number
+                        if (booking.billing_cycle === 'anniversary') {
+                          const anchor = new Date(booking.start_date).getDate()
+                          month = today.getMonth()
+                          if (today.getDate() >= anchor) month += 1
+                          day = anchor
+                        } else {
+                          month = today.getMonth() + 1
+                          day = 1
+                        }
                         if (month > 11) { month = 0; year += 1 }
-                        return <span className="text-[#1E5184] font-medium">{formatDate(new Date(year, month, 1).toISOString().split('T')[0])}</span>
+                        return <span className="text-[#1E5184] font-medium">{formatDate(new Date(year, month, day).toISOString().split('T')[0])}</span>
                       })()}
                     </td>
                     <td className="px-4 py-3 text-gray-600">{formatCurrency(booking.total_due)}</td>

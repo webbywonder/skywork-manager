@@ -38,6 +38,7 @@ export default function BookingForm({ clientId, onSubmit, onCancel }: BookingFor
     end_date: '',
     days: '1',
     gst_applicable: false,
+    billing_cycle: 'calendar',
     notes: '',
   })
   const [submitting, setSubmitting] = useState(false)
@@ -202,6 +203,40 @@ export default function BookingForm({ clientId, onSubmit, onCancel }: BookingFor
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1E5184] focus:border-transparent outline-none"
           />
         </div>
+
+        {isRecurring && (
+          <div className="sm:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Billing Cycle</label>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="billing_cycle"
+                  checked={form.billing_cycle === 'calendar'}
+                  onChange={() => handleChange('billing_cycle', 'calendar')}
+                  className="mt-1 text-[#1E5184]"
+                />
+                <span>
+                  <span className="font-medium text-gray-700">One-to-One</span>
+                  <span className="block text-xs text-gray-500">Calendar-aligned. First partial month prorated; renews on the 1st.</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="billing_cycle"
+                  checked={form.billing_cycle === 'anniversary'}
+                  onChange={() => handleChange('billing_cycle', 'anniversary')}
+                  className="mt-1 text-[#1E5184]"
+                />
+                <span>
+                  <span className="font-medium text-gray-700">Booking-to-Booking</span>
+                  <span className="block text-xs text-gray-500">Anniversary-based. Full month charged each period, renews on the start date.</span>
+                </span>
+              </label>
+            </div>
+          </div>
+        )}
 
         {!isRecurring && (
           <>

@@ -32,7 +32,9 @@ interface BookingDetail {
   end_date: string | null
   days: number | null
   gst_applicable: number
+  billing_cycle: 'calendar' | 'anniversary'
   status: string
+  completed_date: string | null
   notes: string | null
   payments: Payment[]
   extras: BookingExtra[]
@@ -60,7 +62,8 @@ export default function BookingDetailPage() {
   const [showDeleteBooking, setShowDeleteBooking] = useState(false)
   const [showExtraModal, setShowExtraModal] = useState(false)
   const [deleteExtra, setDeleteExtra] = useState<BookingExtra | null>(null)
-  const [showStatusConfirm, setShowStatusConfirm] = useState<'Completed' | 'Cancelled' | null>(null)
+  const [showStatusConfirm, setShowStatusConfirm] = useState<'Completed' | 'Active' | null>(null)
+  const [completedDate, setCompletedDate] = useState(new Date().toISOString().split('T')[0])
   const [showEditModal, setShowEditModal] = useState(false)
 
   const fetchBooking = useCallback(async () => {
@@ -193,15 +196,21 @@ export default function BookingDetailPage() {
   }
 
   /**
-   * Updates the booking status to Completed or Cancelled.
+   * Updates the booking status to Completed or back to Active.
    */
   const handleStatusChange = async () => {
     if (!showStatusConfirm) return
     try {
+      const payload: Record<string, string | null> = { status: showStatusConfirm }
+      if (showStatusConfirm === 'Completed') {
+        payload.completed_date = completedDate
+      } else if (showStatusConfirm === 'Active') {
+        payload.completed_date = null
+      }
       const res = await fetch(`/api/bookings/${params.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: showStatusConfirm }),
+        body: JSON.stringify(payload),
       })
       const json = await res.json()
       if (json.success) {
@@ -239,14 +248,24 @@ export default function BookingDetailPage() {
   if (loading) return <div className="text-gray-500">Loading...</div>
   if (!booking) return <div className="text-gray-500">Booking not found</div>
 
-  // Compute next renewal date for recurring bookings (always 1st of next month)
+  // Next renewal date. Calendar cycle -> 1st of next month. Anniversary cycle ->
+  // same day-of-month as start_date, at or after today.
   let renewsOn: string | null = null
   if (booking.type === 'recurring' && booking.status === 'Active') {
     const today = new Date()
-    let year = today.getFullYear()
-    let month = today.getMonth() + 1
-    if (month > 11) { month = 0; year += 1 }
-    renewsOn = new Date(year, month, 1).toISOString().split('T')[0]
+    if (booking.billing_cycle === 'anniversary') {
+      const anchor = new Date(booking.start_date).getDate()
+      let year = today.getFullYear()
+      let month = today.getMonth()
+      if (today.getDate() >= anchor) month += 1
+      if (month > 11) { month = 0; year += 1 }
+      renewsOn = new Date(year, month, anchor).toISOString().split('T')[0]
+    } else {
+      let year = today.getFullYear()
+      let month = today.getMonth() + 1
+      if (month > 11) { month = 0; year += 1 }
+      renewsOn = new Date(year, month, 1).toISOString().split('T')[0]
+    }
   }
 
   // Monthly due = rate × seats + GST
@@ -258,7 +277,8 @@ export default function BookingDetailPage() {
   // For one-off bookings, total due = single payment
   let totalDue = monthlyDue
   if (booking.type === 'recurring') {
-    totalDue = computeRecurringTotalDue(monthlyDue, booking.start_date)
+    const endDate = booking.status === 'Completed' && booking.completed_date ? booking.completed_date : undefined
+    totalDue = computeRecurringTotalDue(monthlyDue, booking.start_date, endDate, booking.billing_cycle)
   }
 
   const totalPaid = booking.payments.reduce((sum, p) => sum + p.amount_paid, 0)
@@ -280,7 +300,7 @@ export default function BookingDetailPage() {
           </button>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
             {booking.booking_id}
-            <Badge variant={booking.status === 'Active' ? 'green' : booking.status === 'Cancelled' ? 'red' : 'gray'}>
+            <Badge variant={booking.status === 'Active' ? 'green' : 'gray'}>
               {booking.status}
             </Badge>
           </h1>
@@ -297,20 +317,20 @@ export default function BookingDetailPage() {
             Edit
           </button>
           {booking.status === 'Active' && (
-            <>
-              <button
-                onClick={() => setShowStatusConfirm('Completed')}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                Mark Completed
-              </button>
-              <button
-                onClick={() => setShowStatusConfirm('Cancelled')}
-                className="px-4 py-2 text-sm font-medium text-red-600 bg-white border border-red-300 rounded-lg hover:bg-red-50"
-              >
-                Cancel Booking
-              </button>
-            </>
+            <button
+              onClick={() => setShowStatusConfirm('Completed')}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Mark Completed
+            </button>
+          )}
+          {booking.status === 'Completed' && (
+            <button
+              onClick={() => setShowStatusConfirm('Active')}
+              className="px-4 py-2 text-sm font-medium text-[#1E5184] bg-white border border-[#1E5184] rounded-lg hover:bg-blue-50"
+            >
+              Reactivate
+            </button>
           )}
           <button
             onClick={() => setShowDeleteBooking(true)}
@@ -342,6 +362,14 @@ export default function BookingDetailPage() {
               <dt className="text-gray-500">Package</dt>
               <dd className="font-medium">{booking.package}</dd>
             </div>
+            {booking.type === 'recurring' && (
+              <div className="flex justify-between">
+                <dt className="text-gray-500">Billing Cycle</dt>
+                <dd className="font-medium">
+                  {booking.billing_cycle === 'anniversary' ? 'Booking-to-Booking' : 'One-to-One (Calendar)'}
+                </dd>
+              </div>
+            )}
             <div className="border-t border-gray-100 my-1.5" />
             <div className="flex justify-between">
               <dt className="text-gray-500">Rate (per seat)</dt>
@@ -379,6 +407,12 @@ export default function BookingDetailPage() {
               <div className="flex justify-between">
                 <dt className="text-gray-500">End</dt>
                 <dd className="font-medium">{formatDate(booking.end_date)}</dd>
+              </div>
+            )}
+            {booking.completed_date && (
+              <div className="flex justify-between">
+                <dt className="text-gray-500">Completed</dt>
+                <dd className="font-medium">{formatDate(booking.completed_date)}</dd>
               </div>
             )}
             {booking.days && (
@@ -656,6 +690,7 @@ export default function BookingDetailPage() {
       <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit Booking" size="lg">
         <EditBookingForm
           booking={booking}
+          billingCycleLocked={booking.revisions.some(r => r.field_name === 'billing_cycle')}
           onSubmit={handleEditBooking}
           onCancel={() => setShowEditModal(false)}
         />
@@ -664,16 +699,27 @@ export default function BookingDetailPage() {
       {/* Status Change Confirmation */}
       <ConfirmDialog
         isOpen={!!showStatusConfirm}
-        title={showStatusConfirm === 'Completed' ? 'Complete Booking' : 'Cancel Booking'}
+        title={showStatusConfirm === 'Completed' ? 'Complete Booking' : 'Reactivate Booking'}
         message={showStatusConfirm === 'Completed'
-          ? `Mark booking ${booking.booking_id} as completed? This will stop accruing dues.`
-          : `Cancel booking ${booking.booking_id}? This will stop accruing dues. Any outstanding balance will remain.`
+          ? `Mark booking ${booking.booking_id} as completed? This will stop accruing dues as of the selected date.`
+          : `Reactivate booking ${booking.booking_id}? This will resume accruing dues from the original start date.`
         }
-        confirmLabel={showStatusConfirm === 'Completed' ? 'Mark Completed' : 'Cancel Booking'}
-        variant={showStatusConfirm === 'Cancelled' ? 'danger' : 'default'}
+        confirmLabel={showStatusConfirm === 'Completed' ? 'Mark Completed' : 'Reactivate'}
         onConfirm={handleStatusChange}
         onCancel={() => setShowStatusConfirm(null)}
-      />
+      >
+        {showStatusConfirm === 'Completed' && (
+          <div className="mt-3">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Completion Date</label>
+            <input
+              type="date"
+              value={completedDate}
+              onChange={(e) => setCompletedDate(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#1E5184] focus:border-transparent"
+            />
+          </div>
+        )}
+      </ConfirmDialog>
     </div>
   )
 }

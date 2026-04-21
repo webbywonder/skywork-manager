@@ -93,7 +93,7 @@ Payments are a **simple ledger** — each entry is a standalone record of money 
 
 - **Currency:** INR (Rs.) with Indian number formatting
 - **GST:** 18%, optional per booking (`gst_applicable` field). Calculated as `Math.round(baseAmount * 18 / 100)`
-- **Workspace capacity:** 13 seats (9 open + 4 cabin). Dashboard occupancy = SUM(seats) from active bookings
+- **Workspace capacity:** 10 seats (configurable in Settings). Dashboard occupancy = SUM(seats) from active bookings
 - **Credit balance:** When total paid exceeds total due, excess shows as credit on client. Display-only, not auto-applied
 - **Receipt:** Must match `docs/receipt-reference.html` styling exactly — blue gradient header, layout, terms & conditions word-for-word
 - **Brand colour:** Primary blue `#1E5184`

@@ -90,14 +90,34 @@ export function toRupees(paise: number): number {
 }
 
 /**
- * Computes total due for a recurring booking from start_date to today.
- * First partial month is prorated using rate/30 × days remaining.
- * Subsequent calendar months are charged at full rate.
- * If start_date is the 1st, all months are full-rate (no proration needed).
+ * Computes total due for a recurring booking from start_date to endDate (or today).
+ *
+ * Billing cycles:
+ *  - 'calendar' (one-to-one, default): aligned to the calendar month. If the
+ *    start day is not the 1st, the first month is prorated at rate/30 × days
+ *    remaining; every subsequent calendar month is charged in full.
+ *  - 'anniversary' (booking-to-booking): periods run from the start day to the
+ *    same day next month (e.g. 5th → 5th). Each period started is charged in
+ *    full — no proration.
+ *
+ * @param endDate - Optional end date (e.g. completed_date). Defaults to today.
+ * @param billingCycle - Defaults to 'calendar' for backwards compatibility.
  */
-export function computeRecurringTotalDue(monthlyDue: number, startDate: string): number {
+export function computeRecurringTotalDue(
+  monthlyDue: number,
+  startDate: string,
+  endDate?: string,
+  billingCycle: 'calendar' | 'anniversary' = 'calendar',
+): number {
   const start = new Date(startDate)
-  const now = new Date()
+  const now = endDate ? new Date(endDate) : new Date()
+
+  if (billingCycle === 'anniversary') {
+    let periods = (now.getFullYear() - start.getFullYear()) * 12
+      + (now.getMonth() - start.getMonth())
+    if (now.getDate() >= start.getDate()) periods += 1
+    return monthlyDue * Math.max(1, periods)
+  }
 
   const startDay = start.getDate()
 

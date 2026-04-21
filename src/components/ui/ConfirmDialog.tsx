@@ -1,9 +1,12 @@
 'use client'
 
+import type { ReactNode } from 'react'
+
 interface ConfirmDialogProps {
   isOpen: boolean
   title: string
   message: string
+  children?: ReactNode
   confirmLabel?: string
   cancelLabel?: string
   variant?: 'danger' | 'default'
@@ -13,11 +16,13 @@ interface ConfirmDialogProps {
 
 /**
  * Confirmation dialog for destructive actions.
+ * Supports optional children rendered after the message (e.g., form fields).
  */
 export default function ConfirmDialog({
   isOpen,
   title,
   message,
+  children,
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
   variant = 'default',
@@ -32,6 +37,7 @@ export default function ConfirmDialog({
         <div className="px-6 py-4">
           <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
           <p className="mt-2 text-sm text-gray-600">{message}</p>
+          {children}
         </div>
         <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200">
           <button

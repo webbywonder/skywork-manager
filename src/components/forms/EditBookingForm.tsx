@@ -14,8 +14,11 @@ interface EditBookingFormProps {
     end_date: string | null
     days: number | null
     gst_applicable: number
+    billing_cycle: 'calendar' | 'anniversary'
     notes: string | null
   }
+  /** Whether the billing_cycle has already been corrected once and is now locked. */
+  billingCycleLocked?: boolean
   onSubmit: (data: Record<string, string | number | boolean | null>) => Promise<void>
   onCancel: () => void
 }
@@ -24,7 +27,7 @@ interface EditBookingFormProps {
  * Form for editing an existing booking's details.
  * Pre-filled with current values. Rate is in paise (displayed as rupees).
  */
-export default function EditBookingForm({ booking, onSubmit, onCancel }: EditBookingFormProps) {
+export default function EditBookingForm({ booking, billingCycleLocked = false, onSubmit, onCancel }: EditBookingFormProps) {
   const [form, setForm] = useState({
     type: booking.type,
     package: booking.package,
@@ -34,6 +37,7 @@ export default function EditBookingForm({ booking, onSubmit, onCancel }: EditBoo
     end_date: booking.end_date || '',
     days: booking.days?.toString() || '',
     gst_applicable: booking.gst_applicable === 1,
+    billing_cycle: booking.billing_cycle,
     notes: booking.notes || '',
   })
   const [submitting, setSubmitting] = useState(false)
@@ -46,7 +50,7 @@ export default function EditBookingForm({ booking, onSubmit, onCancel }: EditBoo
     e.preventDefault()
     setSubmitting(true)
     try {
-      await onSubmit({
+      const payload: Record<string, string | number | boolean | null> = {
         type: form.type,
         package: form.package,
         seats: parseInt(form.seats, 10),
@@ -56,7 +60,11 @@ export default function EditBookingForm({ booking, onSubmit, onCancel }: EditBoo
         days: form.days ? parseInt(form.days, 10) : null,
         gst_applicable: form.gst_applicable ? 1 : 0,
         notes: form.notes || null,
-      })
+      }
+      if (!billingCycleLocked) {
+        payload.billing_cycle = form.billing_cycle
+      }
+      await onSubmit(payload)
     } finally {
       setSubmitting(false)
     }
@@ -124,6 +132,47 @@ export default function EditBookingForm({ booking, onSubmit, onCancel }: EditBoo
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1E5184] focus:border-transparent outline-none"
           />
         </div>
+
+        {isRecurring && (
+          <div className="sm:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Billing Cycle
+              {billingCycleLocked && (
+                <span className="ml-2 text-xs font-normal text-gray-500">(already corrected once — locked)</span>
+              )}
+            </label>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="billing_cycle"
+                  checked={form.billing_cycle === 'calendar'}
+                  onChange={() => handleChange('billing_cycle', 'calendar')}
+                  disabled={billingCycleLocked}
+                  className="mt-1 text-[#1E5184] disabled:opacity-50"
+                />
+                <span>
+                  <span className="font-medium text-gray-700">One-to-One</span>
+                  <span className="block text-xs text-gray-500">Calendar-aligned. First partial month prorated; renews on the 1st.</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="billing_cycle"
+                  checked={form.billing_cycle === 'anniversary'}
+                  onChange={() => handleChange('billing_cycle', 'anniversary')}
+                  disabled={billingCycleLocked}
+                  className="mt-1 text-[#1E5184] disabled:opacity-50"
+                />
+                <span>
+                  <span className="font-medium text-gray-700">Booking-to-Booking</span>
+                  <span className="block text-xs text-gray-500">Anniversary-based. Full month charged each period, renews on the start date.</span>
+                </span>
+              </label>
+            </div>
+          </div>
+        )}
 
         {!isRecurring && (
           <>

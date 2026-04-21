@@ -28,9 +28,27 @@ export function getDb(): Database.Database {
   const schema = fs.readFileSync(SCHEMA_PATH, 'utf-8')
   db.exec(schema)
 
+  runMigrations(db)
   seedDefaultSettings(db)
 
   return db
+}
+
+/**
+ * Runs schema migrations for columns added after initial table creation.
+ * Each migration checks if the column exists before adding it.
+ */
+function runMigrations(database: Database.Database): void {
+  const columns = database.prepare("PRAGMA table_info('bookings')").all() as { name: string }[]
+  const columnNames = columns.map(c => c.name)
+
+  if (!columnNames.includes('completed_date')) {
+    database.exec('ALTER TABLE bookings ADD COLUMN completed_date TEXT')
+  }
+
+  if (!columnNames.includes('billing_cycle')) {
+    database.exec("ALTER TABLE bookings ADD COLUMN billing_cycle TEXT NOT NULL DEFAULT 'calendar'")
+  }
 }
 
 /**
@@ -49,7 +67,7 @@ function seedDefaultSettings(database: Database.Database): void {
     contact_phone: '+91 9029208698',
     contact_email: 'gadadarshan@gmail.com',
     workspace_address: '1502, Om Siddhivinayak SRA CHS Ltd, Carter Road No. 1, Near Borivali Railway Station, Behind Kasturba Road Police Station, PBC Building Gate No. 2, Borivali East, Mumbai, Maharashtra 400066',
-    workspace_capacity: '12',
+    workspace_capacity: '10',
     open_seats: '9',
     cabin_seats: '4',
     operating_hours: '9:00 AM to 9:00 PM',

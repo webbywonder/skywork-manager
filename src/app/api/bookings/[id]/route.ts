@@ -67,6 +67,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
     const allowedFields: Record<string, 'string' | 'number' | 'nullable_string'> = {
       status: 'string',
+      completed_date: 'nullable_string',
       notes: 'nullable_string',
       package: 'string',
       type: 'string',
@@ -76,6 +77,31 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       end_date: 'nullable_string',
       days: 'number',
       gst_applicable: 'number',
+      billing_cycle: 'string',
+    }
+
+    // Billing cycle can be corrected at most once after creation. If the client
+    // is trying to change it, enforce the cap using the revisions ledger.
+    if (body.billing_cycle !== undefined) {
+      const next = body.billing_cycle
+      if (next !== 'calendar' && next !== 'anniversary') {
+        return NextResponse.json(
+          { success: false, error: 'Invalid billing_cycle value' },
+          { status: 400 }
+        )
+      }
+      const current = (existing as { billing_cycle?: string }).billing_cycle ?? 'calendar'
+      if (next !== current) {
+        const priorRow = db.prepare(
+          "SELECT COUNT(*) as cnt FROM booking_revisions WHERE booking_id = ? AND field_name = 'billing_cycle'"
+        ).get(bookingId) as { cnt: number }
+        if (priorRow.cnt >= 1) {
+          return NextResponse.json(
+            { success: false, error: 'Billing cycle can only be corrected once' },
+            { status: 400 }
+          )
+        }
+      }
     }
 
     for (const [field, fieldType] of Object.entries(allowedFields)) {
@@ -96,7 +122,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     }
 
     // Log revisions for tracked fields before updating
-    const trackedFields = ['rate', 'seats', 'gst_applicable', 'package'] as const
+    const trackedFields = ['rate', 'seats', 'gst_applicable', 'package', 'billing_cycle'] as const
     const existingRecord = existing as Record<string, unknown>
     const insertRevision = db.prepare(
       'INSERT INTO booking_revisions (booking_id, field_name, old_value, new_value) VALUES (?, ?, ?, ?)'

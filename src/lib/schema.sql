@@ -51,7 +51,9 @@ CREATE TABLE IF NOT EXISTS bookings (
   end_date TEXT,
   days INTEGER,
   gst_applicable INTEGER NOT NULL DEFAULT 0,
+  billing_cycle TEXT NOT NULL DEFAULT 'calendar' CHECK(billing_cycle IN ('calendar', 'anniversary')),
   status TEXT NOT NULL DEFAULT 'Active' CHECK(status IN ('Active', 'Completed', 'Cancelled')),
+  completed_date TEXT,
   notes TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))

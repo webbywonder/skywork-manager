@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
+import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import ClientForm from '@/components/forms/ClientForm'
 import { useToast } from '@/components/ui/Toast'
 import { formatCurrency, formatDate } from '@/lib/utils'
@@ -25,6 +26,7 @@ export default function ClientDetailPage() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabId>('overview')
   const [showEditModal, setShowEditModal] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const fetchClient = useCallback(async () => {
     try {
@@ -57,6 +59,23 @@ export default function ClientDetailPage() {
     fetchClient()
   }, [fetchClient])
 
+  const handleDelete = async () => {
+    try {
+      const res = await fetch(`/api/clients/${params.id}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (json.success) {
+        showToast('success', 'Client deleted')
+        router.push('/clients')
+      } else {
+        showToast('error', json.error || 'Failed to delete client')
+        setShowDeleteConfirm(false)
+      }
+    } catch {
+      showToast('error', 'Network error: Failed to delete client')
+      setShowDeleteConfirm(false)
+    }
+  }
+
   const handleUpdate = async (data: Record<string, string>) => {
     const res = await fetch(`/api/clients/${params.id}`, {
       method: 'PUT',
@@ -75,6 +94,8 @@ export default function ClientDetailPage() {
 
   if (loading) return <div className="text-gray-500">Loading...</div>
   if (!client) return <div className="text-gray-500">Client not found</div>
+
+  const isOrphan = bookings.length === 0 && deposits.length === 0
 
   const tabs: { id: TabId; label: string }[] = [
     { id: 'overview', label: 'Overview' },
@@ -105,12 +126,23 @@ export default function ClientDetailPage() {
             {client.company_name && ` • ${client.company_name}`}
           </p>
         </div>
-        <button
-          onClick={() => setShowEditModal(true)}
-          className="px-4 py-2 text-sm font-medium text-white bg-[#1E5184] rounded-lg hover:bg-[#174068]"
-        >
-          Edit Client
-        </button>
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => setShowEditModal(true)}
+            className="px-4 py-2 text-sm font-medium text-white bg-[#1E5184] rounded-lg hover:bg-[#174068]"
+          >
+            Edit Client
+          </button>
+          {isOrphan && (
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="px-4 py-2 text-sm font-medium text-red-600 bg-white border border-red-300 rounded-lg hover:bg-red-50"
+              title="Delete this client (no bookings or deposits attached)"
+            >
+              Delete
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Tabs */}
@@ -270,6 +302,17 @@ export default function ClientDetailPage() {
       <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit Client" size="lg">
         <ClientForm client={client} onSubmit={handleUpdate} onCancel={() => setShowEditModal(false)} />
       </Modal>
+
+      {/* Delete Confirmation */}
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        title="Delete Client"
+        message={`Delete client ${client.name} (${client.client_id})? This cannot be undone.`}
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={handleDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
     </div>
   )
 }

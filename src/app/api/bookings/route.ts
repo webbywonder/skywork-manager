@@ -50,6 +50,9 @@ export async function GET(request: NextRequest) {
       seats: number
       gst_applicable: number
       start_date: string
+      status: string
+      completed_date: string | null
+      billing_cycle: 'calendar' | 'anniversary'
     }
 
     const bookings = db.prepare(`
@@ -67,8 +70,9 @@ export async function GET(request: NextRequest) {
       const gstMonthly = b.gst_applicable ? Math.round(baseMonthly * 18 / 100) : 0
       const monthlyDue = baseMonthly + gstMonthly
 
+      const endDate = b.status === 'Completed' && b.completed_date ? b.completed_date : undefined
       const totalDue = b.type === 'recurring'
-        ? computeRecurringTotalDue(monthlyDue, b.start_date)
+        ? computeRecurringTotalDue(monthlyDue, b.start_date, endDate, b.billing_cycle)
         : monthlyDue
 
       const paidRow = db.prepare(
@@ -99,8 +103,10 @@ export async function POST(request: NextRequest) {
 
     const {
       client_id, walk_in_name, walk_in_phone, type, package: pkg,
-      seats, rate, start_date, end_date, days, gst_applicable, notes
+      seats, rate, start_date, end_date, days, gst_applicable, billing_cycle, notes
     } = body
+
+    const cycle: 'calendar' | 'anniversary' = billing_cycle === 'anniversary' ? 'anniversary' : 'calendar'
 
     if (!type || !pkg || !rate || !start_date) {
       return NextResponse.json(
@@ -125,8 +131,8 @@ export async function POST(request: NextRequest) {
     const rateInPaise = toPaise(parseFloat(rate))
 
     const result = db.prepare(`
-      INSERT INTO bookings (booking_id, client_id, walk_in_name, walk_in_phone, type, package, seats, rate, start_date, end_date, days, gst_applicable, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO bookings (booking_id, client_id, walk_in_name, walk_in_phone, type, package, seats, rate, start_date, end_date, days, gst_applicable, billing_cycle, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       bookingId,
       client_id ? parseInt(client_id, 10) : null,
@@ -140,6 +146,7 @@ export async function POST(request: NextRequest) {
       end_date || null,
       days ? parseInt(days, 10) : null,
       gst_applicable ? 1 : 0,
+      cycle,
       notes || null
     )
 

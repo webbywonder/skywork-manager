@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     const payment = db.prepare(`
       SELECT p.*, b.booking_id, b.type as booking_type, b.package, b.seats,
              b.rate as booking_rate, b.start_date, b.end_date, b.days,
-             b.gst_applicable, b.walk_in_name, b.walk_in_phone,
+             b.gst_applicable, b.billing_cycle, b.walk_in_name, b.walk_in_phone,
              c.name as client_name, c.company_name, c.phone as client_phone,
              c.email as client_email, c.client_id as client_display_id
       FROM payments p

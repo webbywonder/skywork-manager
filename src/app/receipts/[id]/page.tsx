@@ -25,6 +25,7 @@ interface ReceiptData {
     end_date: string | null
     days: number | null
     gst_applicable: number
+    billing_cycle: 'calendar' | 'anniversary'
     walk_in_name: string | null
     walk_in_phone: string | null
     client_name: string | null
@@ -76,41 +77,75 @@ export default function ReceiptPage() {
   const totalWithGst = amountRupees + gstAmount
   const balanceDue = totalWithGst - paidRupees
 
-  // Compute billing period and next renewal date for recurring bookings
+  // Compute billing period and next renewal date for recurring bookings.
+  // Calendar cycle -> periods align to the 1st of the month.
+  // Anniversary cycle -> periods run from the start-date's day-of-month to the
+  // same day next month (e.g. 5th -> 5th), so "next renewal" is the same anchor.
   let renewsOn: string | null = null
   let billingPeriodStart: string | null = payment.billing_period_start
   let billingPeriodEnd: string | null = payment.billing_period_end
+
+  const pad2 = (n: number) => String(n).padStart(2, '0')
+  const isoDay = (y: number, m0: number, d: number) => `${y}-${pad2(m0 + 1)}-${pad2(d)}`
+  const lastDayOfMonth = (y: number, m0: number) => new Date(Date.UTC(y, m0 + 1, 0)).getUTCDate()
 
   if (payment.booking_type === 'recurring') {
     const payDate = payment.payment_date ? new Date(payment.payment_date) : new Date()
 
     if (!billingPeriodStart) {
-      // Derive billing period from payment date and type
-      // Use string manipulation to avoid timezone issues with toISOString()
       const payYear = payDate.getUTCFullYear()
       const payMonth = payDate.getUTCMonth()
 
-      if (payment.payment_type === 'advance') {
-        // Advance = paying for next month
+      if (payment.billing_cycle === 'anniversary') {
+        // Anchor = start date's day-of-month, clamped to each month's length.
+        const anchor = new Date(payment.start_date).getUTCDate()
+        const refMonth = payment.payment_type === 'advance'
+          ? (payDate.getUTCDate() >= anchor ? payMonth + 1 : payMonth + 1)
+          : (payDate.getUTCDate() >= anchor ? payMonth : payMonth - 1)
+
+        const startY = payYear + Math.floor(refMonth / 12)
+        const startM = ((refMonth % 12) + 12) % 12
+        const startD = Math.min(anchor, lastDayOfMonth(startY, startM))
+
+        const endRaw = startM + 1
+        const endY = startY + Math.floor(endRaw / 12)
+        const endM = ((endRaw % 12) + 12) % 12
+        const endAnchor = Math.min(anchor, lastDayOfMonth(endY, endM))
+        // End of period is the day before the next anniversary.
+        const endDate = new Date(Date.UTC(endY, endM, endAnchor))
+        endDate.setUTCDate(endDate.getUTCDate() - 1)
+
+        billingPeriodStart = isoDay(startY, startM, startD)
+        billingPeriodEnd = isoDay(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate())
+      } else if (payment.payment_type === 'advance') {
+        // Calendar cycle advance = paying for next calendar month.
         const startYear = payMonth === 11 ? payYear + 1 : payYear
         const startMonth = payMonth === 11 ? 0 : payMonth + 1
-        const endDay = new Date(Date.UTC(startYear, startMonth + 1, 0)).getUTCDate()
-        billingPeriodStart = `${startYear}-${String(startMonth + 1).padStart(2, '0')}-01`
-        billingPeriodEnd = `${startYear}-${String(startMonth + 1).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`
+        const endDay = lastDayOfMonth(startYear, startMonth)
+        billingPeriodStart = isoDay(startYear, startMonth, 1)
+        billingPeriodEnd = isoDay(startYear, startMonth, endDay)
       } else {
-        // Current month payment
-        const endDay = new Date(Date.UTC(payYear, payMonth + 1, 0)).getUTCDate()
-        billingPeriodStart = `${payYear}-${String(payMonth + 1).padStart(2, '0')}-01`
-        billingPeriodEnd = `${payYear}-${String(payMonth + 1).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`
+        // Calendar cycle current-month payment.
+        const endDay = lastDayOfMonth(payYear, payMonth)
+        billingPeriodStart = isoDay(payYear, payMonth, 1)
+        billingPeriodEnd = isoDay(payYear, payMonth, endDay)
       }
     }
 
-    // Next renewal = 1st of the month after billing period
     if (billingPeriodEnd) {
-      const [ey, em] = billingPeriodEnd.split('-').map(Number)
-      const renewYear = em === 12 ? ey + 1 : ey
-      const renewMonth = em === 12 ? 1 : em + 1
-      renewsOn = `${renewYear}-${String(renewMonth).padStart(2, '0')}-01`
+      if (payment.billing_cycle === 'anniversary') {
+        // Next renewal = day after the billing period ends.
+        const [ey, em, ed] = billingPeriodEnd.split('-').map(Number)
+        const next = new Date(Date.UTC(ey, em - 1, ed))
+        next.setUTCDate(next.getUTCDate() + 1)
+        renewsOn = isoDay(next.getUTCFullYear(), next.getUTCMonth(), next.getUTCDate())
+      } else {
+        // Calendar cycle -> 1st of the month after the billing period.
+        const [ey, em] = billingPeriodEnd.split('-').map(Number)
+        const renewYear = em === 12 ? ey + 1 : ey
+        const renewMonth = em === 12 ? 1 : em + 1
+        renewsOn = `${renewYear}-${pad2(renewMonth)}-01`
+      }
     }
   }
 
@@ -222,7 +257,11 @@ export default function ReceiptPage() {
                           : ''}
                     </span>
                   </td>
-                  <td className="p-3">{payment.booking_type === 'recurring' ? '1 month' : `${payment.days || 1} day${(payment.days || 1) > 1 ? 's' : ''}`}</td>
+                  <td className="p-3">
+                    {payment.booking_type === 'recurring'
+                      ? (payment.billing_cycle === 'anniversary' ? '1 cycle' : '1 month')
+                      : `${payment.days || 1} day${(payment.days || 1) > 1 ? 's' : ''}`}
+                  </td>
                   <td className="p-3">{formatRupees(payment.booking_rate / 100)}</td>
                   <td className="p-3 text-right">{formatRupees(amountRupees)}</td>
                 </tr>

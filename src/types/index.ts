@@ -38,6 +38,7 @@ export interface Client {
 
 export type BookingType = 'one-off' | 'recurring'
 export type BookingStatus = 'Active' | 'Completed' | 'Cancelled'
+export type BillingCycle = 'calendar' | 'anniversary'
 
 export interface Booking {
   id: number
@@ -53,7 +54,9 @@ export interface Booking {
   end_date: string | null
   days: number | null
   gst_applicable: number
+  billing_cycle: BillingCycle
   status: BookingStatus
+  completed_date: string | null
   notes: string | null
   created_at: string
   updated_at: string
